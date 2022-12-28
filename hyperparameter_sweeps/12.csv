@@ -1,0 +1,11 @@
+,B_L1_norm,G_L1_norm,G_L2_error,experiment_name,seed,S,dimension,initialization_method,regularization_parameter,max_epochs,learning_rate,do_early_stopping,optimizer,num_controls,gradient_clip_val,do_shuffle,do_line_search,stopping_threshold,divergence_threshold
+0,0.007835435,2.031629,0.021919008228312387,optimizer,0,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000.0
+2,0.0058932463,2.1471906,0.036673354928923985,optimizer,1,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000.0
+4,0.010240873,1.9658666,0.11027624118393166,optimizer,2,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000.0
+6,0.015982946,2.048948,0.06274754059611229,optimizer,3,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000.0
+8,0.0061462983,1.9815967,0.030179440318750528,optimizer,4,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000.0
+1,0.0038940564,2.0245266,0.007070179912577523,optimizer,0,2,2,identity,0.001,10000,1.0,True,L-BFGS,10,,False,True,0.1,10000.0
+3,0.0009717266,2.1341324,0.0020834533624185525,optimizer,1,2,2,identity,0.001,10000,1.0,True,L-BFGS,10,,False,True,0.1,10000.0
+5,0.04154299,2.509489,1.2786545868522476,optimizer,2,2,2,identity,0.001,10000,1.0,True,L-BFGS,10,,False,True,0.1,10000.0
+7,0.0003655349,2.027491,0.0025249217653605938,optimizer,3,2,2,identity,0.001,10000,1.0,True,L-BFGS,10,,False,True,0.1,10000.0
+9,0.005156449,1.9616919,0.02073100274880013,optimizer,4,2,2,identity,0.001,10000,1.0,True,L-BFGS,10,,False,True,0.1,10000.0

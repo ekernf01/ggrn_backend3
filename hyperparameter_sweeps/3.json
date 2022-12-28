@@ -1,0 +1,51 @@
+{
+    "experiment_name": [
+        "dimension"
+    ],
+    "seed": [
+        0,
+        1,
+        2
+    ],
+    "S": [
+        2
+    ],
+    "dimension": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+    ],
+    "B_L1_norm": [
+        null
+    ],
+    "G_L1_norm": [
+        null
+    ],
+    "G_L2_error": [
+        null
+    ],
+    "initialization_method": [
+        "identity"
+    ],
+    "regularization_parameter": [
+        0.001
+    ],
+    "max_epochs": [
+        800
+    ],
+    "learning_rate": [
+        0.0005
+    ],
+    "do_early_stopping": [
+        true
+    ],
+    "optimizer": [
+        "L-BFGS"
+    ]
+}

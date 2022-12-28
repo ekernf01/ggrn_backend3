@@ -1,0 +1,10 @@
+,experiment_name,seed,S,dimension,B_L1_norm,G_L1_norm,G_L2_error,initialization_method,regularization_parameter,max_epochs,learning_rate,do_early_stopping,optimizer
+0,kaiming_vs_identity_simple,0,2,2,0.13614123,3.0423002,3.4818222373118117,kaiming,0.001,800,0.0005,False,L-BFGS
+1,kaiming_vs_identity_simple,0,2,2,1.4305216e-06,2.0200856,6.254646311654177e-06,identity,0.001,800,0.0005,False,L-BFGS
+2,kaiming_vs_identity_simple,0,2,2,7.2073935e-06,2.0200782,1.556810391323271e-05,user,0.001,800,0.0005,False,L-BFGS
+3,kaiming_vs_identity_simple,1,2,2,14.652184,2.974288,1.9985085466174977,kaiming,0.001,800,0.0005,False,L-BFGS
+4,kaiming_vs_identity_simple,1,2,2,1.4305216e-06,2.0200856,6.254646311654177e-06,identity,0.001,800,0.0005,False,L-BFGS
+5,kaiming_vs_identity_simple,1,2,2,7.2073935e-06,2.0200782,1.556810391323271e-05,user,0.001,800,0.0005,False,L-BFGS
+6,kaiming_vs_identity_simple,2,2,2,1389501400000000.0,5819727000000000.0,5819726904688642.0,kaiming,0.001,800,0.0005,False,L-BFGS
+7,kaiming_vs_identity_simple,2,2,2,1.4305216e-06,2.0200856,6.254646311654177e-06,identity,0.001,800,0.0005,False,L-BFGS
+8,kaiming_vs_identity_simple,2,2,2,7.2073935e-06,2.0200782,1.556810391323271e-05,user,0.001,800,0.0005,False,L-BFGS

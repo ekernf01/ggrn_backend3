@@ -1,10 +1,11 @@
 import torch
 import pytorch_lightning as pl
-import ggrn_backend3.linear
+import linear_autoregressive
 import anndata
 import math
 import pandas as pd
 import numpy as np
+import sklearn
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
@@ -116,10 +117,16 @@ class GGRNAutoregressiveModel:
         initialization_method = "identity",
         initialization_value = None,
         do_shuffle = False,
+        gradient_clip_val = None,
+        do_line_search = True,
+        stopping_threshold = 0.1,
+        divergence_threshold = 1E4,
     ):
+        if optimizer == "L-BFGS" and gradient_clip_val is not None:
+            raise ValueError("Gradient clipping is not allowed with a second-order method like L-BFGS.")
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = ggrn_backend3.linear.LinearAutoregressive(
+        self.model = linear_autoregressive.LinearAutoregressive(
             n_genes = self.train_data.adata.X.shape[1],
             S = S,
             regression_method = regression_method,
@@ -130,13 +137,35 @@ class GGRNAutoregressiveModel:
             optimizer=optimizer,
             initialization_method=initialization_method,
             initialization_value=initialization_value,
+            do_line_search = do_line_search,
         )
-        dataloader = torch.utils.data.DataLoader(self.train_data, batch_size=batch_size, shuffle=do_shuffle, num_workers=num_workers)
+        dataloader = torch.utils.data.DataLoader(
+            self.train_data, 
+            batch_size=batch_size, 
+            shuffle=do_shuffle,
+            num_workers=num_workers
+        )
         trainer = pl.Trainer(
             max_epochs=max_epochs,
             accelerator=device,   
             track_grad_norm = 2, 
-            callbacks=[GradNormCallback()] + ([EarlyStopping(monitor="training_loss", mode="min")] if do_early_stopping else []),
+            gradient_clip_val = gradient_clip_val,
+            deterministic = True,
+            callbacks=[GradNormCallback()] + (
+                [
+                    EarlyStopping(
+                        monitor="training_loss", 
+                        mode="min",
+                        min_delta=0.00, 
+                        patience=30, 
+                        verbose=True,
+                        strict=True,
+                        stopping_threshold = stopping_threshold,
+                        divergence_threshold = divergence_threshold,
+                        check_finite = True,
+                    )
+                ] if do_early_stopping else []
+                ),
         )
         trainer.fit(model=self.model, train_dataloaders=dataloader)
         trainer.save_checkpoint('./checkpoints/last.ckpt')

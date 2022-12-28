@@ -1,0 +1,45 @@
+{
+    "experiment_name": [
+        "kaiming_vs_identity_simple"
+    ],
+    "seed": [
+        0,
+        1,
+        2
+    ],
+    "S": [
+        2
+    ],
+    "dimension": [
+        2
+    ],
+    "B_L1_norm": [
+        null
+    ],
+    "G_L1_norm": [
+        null
+    ],
+    "G_L2_error": [
+        null
+    ],
+    "initialization_method": [
+        "kaiming",
+        "identity",
+        "user"
+    ],
+    "regularization_parameter": [
+        0.001
+    ],
+    "max_epochs": [
+        800
+    ],
+    "learning_rate": [
+        0.0005
+    ],
+    "do_early_stopping": [
+        false
+    ],
+    "optimizer": [
+        "L-BFGS"
+    ]
+}

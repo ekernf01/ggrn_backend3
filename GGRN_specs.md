@@ -90,6 +90,7 @@ We will implement this in Pytorch, so that we can fit any differentiable functio
 - A different work-around (linear only) would be to represent $F$ via its eigendecomposition. 
 - Yet another relaxation would be to minimize $||Y - F_1(F_2(X))||^2 + \lambda||F_1(X) - F_2(X)||^2$.
 - Another possible pitfall is if $z\neq Q((z))$. Adding $||Q(R(z)) - z||^2$ to $J$ could help, or $R$ could be absorbed into $G$ as in DCD-FG.
+- If you use L-BFGS rather than ADAM, PyTorch allows you to set the learning rate and do gradient clipping. This makes no sense with L-BFGS. Use LR=1 with no gradient clipping.
 
 #### Software testing
 
@@ -106,15 +107,31 @@ Other features present certain obstacles to testing code correctness.
 
 As of 2022 Dec 27, the code is in an interesting state where it converges to the right answer on low-D toy examples some of the time, and other times it displays a couple different problems. Sometimes it refuses to converge and other times it is making progress but rapidly blows up to very large weights or biases. Here is what we have begun to experiment with.
 
-- Size and dimension of training data
+- Size and dimension of simulated data
 - Values of S up to 7 (mostly 1 and 2)
 - Random seed (after which everything is deterministic)
-- Initialization of G & regularization target
+- Initialization of G 
+- L1 regularization strength
 - Early stopping
+- Gradient clipping
+- Learning rate
+- L-BFGS versus Adam ([see also](https://soham.dev/posts/linear-regression-pytorch/))
 
 Anecdotally:
 
 - higher S and higher dimension makes training harder. 
 - Regular initializations designed for independent layers (e.g. kaiming or xavier) do not work as well for our model, which is structured more like a recurrent neural network. A better default is the identity matrix, used by Geoff Hinton's group in [this RNN initialization paper](https://arxiv.org/pdf/1504.00941.pdf).
-- Early stopping is often too early. It's often described as a way to prevent overfitting: you stop when the validation loss increases, even if the training loss could decrease further ([example](https://medium.com/pytorch/pytorch-lightning-1-3-lightning-cli-pytorch-profiler-improved-early-stopping-6e0ffd8deb29)). Right now, I just want to fit the training data really well, but I'm using early stopping because there seems to be no other way to test for convergence when using pytorch lightning.
+- Early stopping is often too early. It's often described as a way to prevent overfitting: you stop when the validation loss increases, even if the training loss could decrease further ([example](https://medium.com/pytorch/pytorch-lightning-1-3-lightning-cli-pytorch-profiler-improved-early-stopping-6e0ffd8deb29)). Right now, I just want to fit the training data really well, but I'm using early stopping because there seems to be no other way to test for convergence when using pytorch lightning. UPDATE: there are tolerance params in torch.optim.LBFGS and they are probably just so small that I haven't run into them yet.
 
+Formal experiments:
+
+- Experiments 1-4 accidentally used the same seed on all repeats so they have effectively no replication. But they seem to show that "kaiming" is worse than "identity" init (best honest option), and "identity" is worse than "user" (which is done by cheating) (see logs 2 & 4). Also, that higher dimensions (range: 2 to 10 and S: 2) make this a harder problem (log 3). 
+- Experiment 5 has 5 replicates and confirms that "kaiming" is worse than "identity" init, and "identity" is worse than "user".
+- Experiment 6 has 5 replicates and shows that shuffling the data is harmful. 
+- Experiment 7 has 5 replicates and shows that early stopping sometimes helps and sometimes hurts. Longer runtime will probably eventually be better if we can solve the problem where certain runs diverge. 
+- Experiment 8 shows that setting the learning rate to 1 instead of 0.0005 makes it worse, even though L-BFGS doesn't have a learning rate parameter. This makes no sense and it was with early stopping so I continued with lr=1 regardless. lr=1 is the PyTorch default for L-BFGS. L-BFGS has a similar parameter called a step length, which is either fixed at 1 (pytorch default) or found at each iteration via binary search. 
+- Experiment 9 is a redo of experiment 8 with no early stopping. Small learning rate works well 3/5 times and diverges 2/5. Learning rate of 1 never converges and never diverges. 
+- Experiment 10 is a redo of experiment 9 with line search on vs off instead of setting LR to 1 versus small. LR is fixed at 1. There is no early stopping. Without line search, 0/5 converged. Line search kicks ass, converging nicely on 4/5 random seeds. The worst performer was seed=2. The transition matrix was [[0.89, 0.12],    [0.76, 0.17]], which is ill-conditioned (eigenvalues of 1 and 0.06) and far from the identity (which is the current initialization). The loss became stuck at 6.9 and remained stuck there throughout training. This happened even when the regularization parameter was set to 0. The value of G that it gets stuck at is [[0.9705113 , 0.10846261], [0.41104037, 1.0194758 ]] . ADAM does not get stuck on this problem, though it takes ~7,000 epochs to get the loss below 0.1.
+- Experiment 11 tests ADAM versus L-BFGS on the same 5 random datasets (including seed 2, the nasty case just discussed). ADAM is worse and does get stuck on the problem case (seed=2), which contradicts the above possible due to early stopping. 
+- Experiment 12 tries to rectify the problem via better settings of Lightning's early stopping mechanism. With better early stopping params, ADAM converges 5/5 times and L-BFGS only 4. Maybe we are ready to make it harder.
+- Experiment 13 increases the dimension.

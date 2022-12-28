@@ -1,0 +1,55 @@
+{
+   "B_L1_norm": [
+      null
+   ],
+   "G_L1_norm": [
+      null
+   ],
+   "G_L2_error": [
+      null
+   ],
+   "experiment_name": [
+      "learning_rate"
+   ],
+   "seed": [
+      0,
+      1,
+      2,
+      4,
+      5
+   ],
+   "S": [
+      2
+   ],
+   "dimension": [
+      2
+   ],
+   "initialization_method": [
+      "identity"
+   ],
+   "regularization_parameter": [
+      0.001
+   ],
+   "max_epochs": [
+      800
+   ],
+   "learning_rate": [
+      0.0005,
+      1
+   ],
+   "do_early_stopping": [
+      true
+   ],
+   "optimizer": [
+      "L-BFGS"
+   ],
+   "num_controls": [
+      10
+   ],
+   "gradient_clip_val": [
+      null
+   ],
+   "do_shuffle": [
+      false
+   ]
+}

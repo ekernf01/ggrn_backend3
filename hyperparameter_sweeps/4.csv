@@ -1,0 +1,16 @@
+,B_L1_norm,G_L1_norm,G_L2_error,experiment_name,seed,S,dimension,initialization_method,regularization_parameter,max_epochs,learning_rate,do_early_stopping,optimizer,num_controls,gradient_clip_val
+0,0.023133066,2.4468393,1.2834623715610607,initialization_redo,0,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,0.5
+1,0.0133368615,1.9984624,3.4011322631829555,initialization_redo,0,2,2,kaiming,0.001,800,0.0005,True,L-BFGS,10,0.5
+2,9.1980455e-06,2.0200934,0.00012804206860439482,initialization_redo,0,2,2,user,0.001,800,0.0005,True,L-BFGS,10,0.5
+3,0.027690582,2.3485506,1.5310743589244857,initialization_redo,1,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,0.5
+4,0.06706458,2.4213333,1.353559042360745,initialization_redo,1,2,2,kaiming,0.001,800,0.0005,True,L-BFGS,10,0.5
+5,5.4414704e-06,2.134325,3.5651571540284976e-05,initialization_redo,1,2,2,user,0.001,800,0.0005,True,L-BFGS,10,0.5
+6,0.015155482,2.2198753,1.6085166450149369,initialization_redo,2,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,0.5
+7,0.24987271,2.1533215,3.6211767101515386,initialization_redo,2,2,2,kaiming,0.001,800,0.0005,True,L-BFGS,10,0.5
+8,5.866879e-05,1.938825,0.00029336773992220955,initialization_redo,2,2,2,user,0.001,800,0.0005,True,L-BFGS,10,0.5
+9,0.031772386,2.7547197,1.661087840139078,initialization_redo,4,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,0.5
+10,0.10207847,3.6207178,3.7734048545876617,initialization_redo,4,2,2,kaiming,0.001,800,0.0005,True,L-BFGS,10,0.5
+11,7.2634944e-06,1.9707761,7.63826958409819e-05,initialization_redo,4,2,2,user,0.001,800,0.0005,True,L-BFGS,10,0.5
+12,0.02027935,2.4761333,1.1836980174844998,initialization_redo,5,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,0.5
+13,0.007213123,2.0695047,2.6098366752676263,initialization_redo,5,2,2,kaiming,0.001,800,0.0005,True,L-BFGS,10,0.5
+14,1.0497776e-05,1.867489,9.287043850447763e-05,initialization_redo,5,2,2,user,0.001,800,0.0005,True,L-BFGS,10,0.5

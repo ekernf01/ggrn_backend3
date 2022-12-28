@@ -1,0 +1,11 @@
+,B_L1_norm,G_L1_norm,G_L2_error,experiment_name,seed,S,dimension,initialization_method,regularization_parameter,max_epochs,learning_rate,do_early_stopping,optimizer,num_controls,gradient_clip_val,do_shuffle
+0,3.4192763e-05,2.0200229,0.00014063355471038985,shuffle,0,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,True
+1,0.009621919,2.034484,0.02669548604203309,shuffle,0,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,False
+2,0.42363435,2.24906,1.3493734907068236,shuffle,1,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,True
+3,0.07357629,2.159241,0.3728075055531992,shuffle,1,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,False
+4,0.37595648,2.6650171,1.4000676910883736,shuffle,2,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,True
+5,0.09639792,2.3248472,0.8401142995364022,shuffle,2,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,False
+6,26.823647,199.07063,197.6658033920669,shuffle,4,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,True
+7,0.04077088,1.957457,0.09159765315602697,shuffle,4,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,False
+8,0.13115183,2.509511,0.9980734627311963,shuffle,5,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,True
+9,0.099540606,1.8061799,0.3518743915198671,shuffle,5,2,2,identity,0.001,800,0.0005,True,L-BFGS,10,,False

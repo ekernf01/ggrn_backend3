@@ -30,12 +30,14 @@ class LinearAutoregressive(pl.LightningModule):
         optimizer,
         initialization_method,
         initialization_value,
+        do_line_search,
     ):
         super().__init__()
         self.S = S
         self.learning_rate = learning_rate
         self.regularization_parameter = regularization_parameter
         self.optimizer = optimizer
+        self.do_line_search = do_line_search
         if regression_method == "linear":
             self.G = torch.nn.Linear(n_genes, n_genes)
         elif regression_method in {'multilayer_perceptron', 'mlp'}:
@@ -103,16 +105,14 @@ class LinearAutoregressive(pl.LightningModule):
 
     def configure_optimizers(self):
         if self.optimizer == "L-BFGS":
-            return torch.optim.LBFGS(self.parameters(), lr=self.learning_rate)        
+            return torch.optim.LBFGS(self.parameters(), lr=self.learning_rate, line_search_fn = 'strong_wolfe' if self.do_line_search else None )        
         elif self.optimizer == "ADAM":
             return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         else:
             raise ValueError(f"Optimizer must be 'ADAM' or 'L-BFGS'. Value: {self.optimizer}")
 
     def initialize_g(self, initialization_method, initialization_value = None):
-        print(" ===== Initializing G ===== ")
         for name, param in self.named_parameters():
-            print(name)
             if initialization_method in {"kaiming", "he"}:
                 # Initialization suitable for use with leaky ReLU, from Kaiming He et al 2015.
                 # From the official Pytorch website, https://pytorch-lightning.readthedocs.io/en/stable/notebooks/course_UvA-DL/03-initialization-and-optimization.html
