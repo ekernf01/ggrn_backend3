@@ -1,0 +1,82 @@
+{
+   "est_B_L1_norm": [
+      null
+   ],
+   "true_G_L1_norm": [
+      null
+   ],
+   "est_G_L1_norm": [
+      null
+   ],
+   "est_G_L1_error": [
+      null
+   ],
+   "num_epochs": [
+      null
+   ],
+   "experiment_name": [
+      "high_d_no_eigenvalue_scaling"
+   ],
+   "seed": [
+      0
+   ],
+   "S": [
+      1
+   ],
+   "dimension": [
+      2,
+      5,
+      10,
+      20,
+      50,
+      100,
+      200,
+      500,
+      1000
+   ],
+   "initialization_method": [
+      "identity"
+   ],
+   "regularization_parameter": [
+      0.001
+   ],
+   "max_epochs": [
+      10000
+   ],
+   "batch_size": [
+      10000
+   ],
+   "learning_rate": [
+      "this is overwritten below"
+   ],
+   "do_early_stopping": [
+      true
+   ],
+   "optimizer": [
+      "L-BFGS"
+   ],
+   "num_controls": [
+      10
+   ],
+   "gradient_clip_val": [
+      null
+   ],
+   "do_shuffle": [
+      false
+   ],
+   "do_line_search": [
+      true
+   ],
+   "lbfgs_memory": [
+      100
+   ],
+   "stopping_threshold": [
+      0.1
+   ],
+   "divergence_threshold": [
+      10000.0
+   ],
+   "profiler": [
+      "advanced"
+   ]
+}

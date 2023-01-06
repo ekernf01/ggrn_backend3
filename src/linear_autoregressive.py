@@ -31,6 +31,7 @@ class LinearAutoregressive(pl.LightningModule):
         initialization_method,
         initialization_value,
         do_line_search,
+        lbfgs_memory,
     ):
         super().__init__()
         self.S = S
@@ -38,6 +39,7 @@ class LinearAutoregressive(pl.LightningModule):
         self.regularization_parameter = regularization_parameter
         self.optimizer = optimizer
         self.do_line_search = do_line_search
+        self.lbfgs_memory = lbfgs_memory
         if regression_method == "linear":
             self.G = torch.nn.Linear(n_genes, n_genes)
         elif regression_method in {'multilayer_perceptron', 'mlp'}:
@@ -72,7 +74,8 @@ class LinearAutoregressive(pl.LightningModule):
 
     def training_step(self, input_batch):
         loss = 0
-        for i in range(len(input_batch["treatment"]["metadata"]["perturbation"])):
+        batch_size = len(input_batch["treatment"]["metadata"]["perturbation"])
+        for i in range(batch_size):
             perturbed_indices = [int(g)   for g in input_batch["treatment"]["metadata"]["perturbation_index"][i].split(",")]
             perturbations = zip(
                 perturbed_indices,
@@ -97,17 +100,21 @@ class LinearAutoregressive(pl.LightningModule):
         lasso_term = torch.abs(
             [param - torch.eye(param.shape[0]) if name == "weight" else param for name, param in self.G.named_parameters() ][0]
         ).sum()
-        self.log("mse", loss, logger=False)
+        self.log("mse", loss, batch_size = batch_size, logger=True)
         loss += self.regularization_parameter*lasso_term
-        self.log("training_loss", loss, logger=False)
-        self.log("lasso_term", lasso_term, logger=False)
+        self.log("training_loss", loss, batch_size = batch_size, logger=True)
+        self.log("lasso_term", lasso_term, batch_size = batch_size, logger=True)
         return loss
 
     def configure_optimizers(self):
         if self.optimizer == "L-BFGS":
-            return torch.optim.LBFGS(self.parameters(), lr=self.learning_rate, line_search_fn = 'strong_wolfe' if self.do_line_search else None )        
+            return torch.optim.LBFGS(self.parameters(), lr=self.learning_rate, line_search_fn = 'strong_wolfe' if self.do_line_search else None, history_size=self.lbfgs_memory )        
         elif self.optimizer == "ADAM":
             return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        elif self.optimizer == "ADAMW":
+            return torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01, amsgrad=False)
+        elif self.optimizer == "AMSGRAD":
+            return torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01, amsgrad=True)
         else:
             raise ValueError(f"Optimizer must be 'ADAM' or 'L-BFGS'. Value: {self.optimizer}")
 

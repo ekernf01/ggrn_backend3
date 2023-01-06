@@ -6,7 +6,10 @@ import math
 import pandas as pd
 import numpy as np
 import sklearn
+import os
+from datetime import datetime
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
 
 class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
     def __init__(self, adata: anndata.AnnData, matching_method: str) -> None:
@@ -119,8 +122,11 @@ class GGRNAutoregressiveModel:
         do_shuffle = False,
         gradient_clip_val = None,
         do_line_search = True,
+        lbfgs_memory=100,
         stopping_threshold = 0.1,
-        divergence_threshold = 1E4,
+        divergence_threshold = np.inf,
+        experiment_name = None,
+        profiler = None,
     ):
         if optimizer == "L-BFGS" and gradient_clip_val is not None:
             raise ValueError("Gradient clipping is not allowed with a second-order method like L-BFGS.")
@@ -138,27 +144,37 @@ class GGRNAutoregressiveModel:
             initialization_method=initialization_method,
             initialization_value=initialization_value,
             do_line_search = do_line_search,
+            lbfgs_memory = lbfgs_memory,
         )
         dataloader = torch.utils.data.DataLoader(
             self.train_data, 
-            batch_size=batch_size, 
+            batch_size=int(batch_size), 
             shuffle=do_shuffle,
             num_workers=num_workers
         )
         trainer = pl.Trainer(
+            profiler = profiler,
+            logger = TensorBoardLogger(
+                name=experiment_name, 
+                save_dir=os.path.join(
+                    "lightning_logs", 
+                    experiment_name,
+                    datetime.now().strftime("%Y-%m-%d__%H:%M:%S"),
+                )
+            ),
             max_epochs=max_epochs,
             accelerator=device,   
             track_grad_norm = 2, 
             gradient_clip_val = gradient_clip_val,
             deterministic = True,
-            callbacks=[GradNormCallback()] + (
+            callbacks= (
                 [
                     EarlyStopping(
                         monitor="training_loss", 
                         mode="min",
                         min_delta=0.00, 
                         patience=30, 
-                        verbose=True,
+                        verbose=False,
                         strict=True,
                         stopping_threshold = stopping_threshold,
                         divergence_threshold = divergence_threshold,

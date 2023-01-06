@@ -1,0 +1,16 @@
+,B_L1_norm,G_L1_norm,G_L1_error,experiment_name,seed,S,dimension,initialization_method,regularization_parameter,max_epochs,learning_rate,do_early_stopping,optimizer,num_controls,gradient_clip_val,do_shuffle,do_line_search,stopping_threshold,divergence_threshold
+0,0.3498806,19.943502,0.00094480482756,high_dimension,0,1,20,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+1,2.7856703,50.133617,0.001725252814393,high_dimension,0,1,50,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+2,2.4729288,102.15202,0.001558385844336,high_dimension,0,1,100,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+3,0.2153855,20.07779,0.000598835070716,high_dimension,1,1,20,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+4,2.4862723,50.85735,0.001452673823789,high_dimension,1,1,50,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+5,3.1164293,101.47314,0.001796702045293,high_dimension,1,1,100,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+6,0.20611528,20.108812,0.000563617258982,high_dimension,2,1,20,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+7,3.0116415,50.452843,0.001891955426935,high_dimension,2,1,50,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+8,4.6723933,101.83707,0.001829162168023,high_dimension,2,1,100,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+9,0.3696767,20.284206,0.001012610205362,high_dimension,3,1,20,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+10,3.2773268,50.136482,0.002000975635713,high_dimension,3,1,50,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+11,2.9741333,101.69136,0.001604768078676,high_dimension,3,1,100,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+12,0.6377864,20.571342,0.001583069283378,high_dimension,4,1,20,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+13,2.9347813,50.96877,0.001705010841413,high_dimension,4,1,50,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+14,3.674078,100.48753,0.00145553182388,high_dimension,4,1,100,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000

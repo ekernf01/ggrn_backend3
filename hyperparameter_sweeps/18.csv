@@ -1,0 +1,7 @@
+,est_B_L1_norm,true_G_L1_norm,est_G_L1_norm,est_G_L1_error,num_epochs,experiment_name,seed,S,dimension,initialization_method,regularization_parameter,max_epochs,batch_size,learning_rate,do_early_stopping,optimizer,num_controls,gradient_clip_val,do_shuffle,do_line_search,lbfgs_memory,stopping_threshold,divergence_threshold,profiler,walltime
+0,0.0016165578,0.010003303642261213,0.010009195,2.7518133619582165e-05,197,more_optimizers,0,1,100,identity,0.001,10000,10000,1,True,L-BFGS,10,,False,True,1,0.1,10000.0,advanced,548.3246083389968
+1,0.0022827762,0.010003303642261213,0.010010069,3.886454774676241e-05,196,more_optimizers,0,1,100,identity,0.001,10000,10000,1,True,L-BFGS,10,,False,True,2,0.1,10000.0,advanced,536.358990585024
+2,0.00050302356,0.010003303642261213,0.010009119,8.558365978032156e-06,98,more_optimizers,0,1,100,identity,0.001,10000,10000,1,True,L-BFGS,10,,False,True,5,0.1,10000.0,advanced,224.69119435199536
+3,1.2239254e-05,0.010003303642261213,0.010003429,2.1433218822543222e-07,141,more_optimizers,0,1,100,identity,0.001,10000,10000,1,True,L-BFGS,10,,False,True,10,0.1,10000.0,advanced,359.0400069640018
+4,0.000510419,0.010003303642261213,0.010010394,8.712292386717054e-06,91,more_optimizers,0,1,100,identity,0.001,10000,10000,1,True,L-BFGS,10,,False,True,20,0.1,10000.0,advanced,214.08714969598805
+5,0.00012884184,0.010003303642261213,0.010004108,2.198472508977522e-06,120,more_optimizers,0,1,100,identity,0.001,10000,10000,1,True,L-BFGS,10,,False,True,100,0.1,10000.0,advanced,308.11268259299686

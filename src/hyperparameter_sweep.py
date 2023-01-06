@@ -16,6 +16,7 @@ from itertools import product
 import pandas as pd
 import numpy as np
 import anndata 
+from timeit import default_timer as timer
 
 def simulate_autoregressive(
     num_controls = 2, 
@@ -39,9 +40,7 @@ def simulate_autoregressive(
     metadata.index = [str(i) for i in metadata.index]
     np.random.seed(seed)
     all_controls = np.random.random((num_controls, num_features))
-    G = np.random.random((num_features,num_features))
-    # Make sure a steady state exists
-    G = G / np.max(np.real(np.linalg.eigvals(G))) 
+    G = np.random.random((num_features,num_features)) + np.eye(num_features)
 
     def perturb(one_control, perturbation, expression_level_after_perturbation):
         x = one_control.copy()
@@ -78,32 +77,37 @@ def simulate_autoregressive(
     )
     return linear_autoregressive, G, factors
 
-hyperparameters = {  
-    'B_L1_norm':                [None],
-    'G_L1_norm':                [None],
-    'G_L2_error':               [None],
-    "experiment_name":          ["optimizer"],
-    'seed':                     [0,1,2,3,4],
-    'S':                        [2],
-    'dimension':                [2, 5, 10],
-    'initialization_method':    ['identity'],
+hyperparameters = {
+    'est_B_L1_norm':            [None],
+    'true_G_L1_norm':           [None],
+    'est_G_L1_norm':            [None],
+    'est_G_L1_error':           [None],
+    'num_epochs':               [None],
+    "experiment_name":          ["S"],
+    'seed':                     [0],
+    'S':                        [4],
+    'dimension':                [10, 20, 50, 100, 200, 500],
+    'initialization_method':    ['identity'],    
     'regularization_parameter': [0.001],
     'max_epochs':               [10000],
-    "learning_rate":            ["see code below"],
+    'batch_size':               [100000],
+    "learning_rate":            ["this is overwritten below"],
     "do_early_stopping":        [True],
     "optimizer":                ["ADAM"],
     "num_controls":             [10],
     "gradient_clip_val":        [None],
     "do_shuffle":               [False],
     "do_line_search":           [True],
+    "lbfgs_memory":             [100],
     "stopping_threshold":       [0.1],
-    "divergence_threshold":     [1E4],
+    "divergence_threshold":     [np.inf],
+    "profiler":                 [None],
 }
 conditions =  pd.DataFrame(
     [row for row in product(*hyperparameters.values())], 
     columns=hyperparameters.keys()
 )
-conditions["learning_rate"] = [0.0005 if o=="ADAM" else 1 for o in conditions["optimizer"]]
+conditions["learning_rate"] = [1 if o=="L-BFGS" else 0.0005 for o in conditions["optimizer"]]
 
 for i, _ in conditions.iterrows():
     print(f" ===== {i} ===== ")
@@ -114,13 +118,16 @@ for i, _ in conditions.iterrows():
         seed =         conditions.loc[i,"seed"], 
     )
     model = ggrn_backend3.GGRNAutoregressiveModel(linear_autoregressive, matching_method = "user")
+    start = timer()
     trainer = model.train(
         S                        = conditions.loc[i,"S"],
+        experiment_name          = conditions.loc[i,"experiment_name"],
         regression_method = "linear",
         low_dimensional_structure = "none",
         low_dimensional_training = None,
         network = None,     
         max_epochs               = conditions.loc[i, "max_epochs"],
+        batch_size               = conditions.loc[i, "batch_size"],
         learning_rate            = conditions.loc[i, "learning_rate"],
         regularization_parameter = conditions.loc[i, "regularization_parameter"],
         optimizer                = conditions.loc[i, "optimizer"], 
@@ -129,26 +136,36 @@ for i, _ in conditions.iterrows():
         initialization_value = G,
         do_shuffle               = conditions.loc[i, "do_shuffle"],
         gradient_clip_val        = conditions.loc[i, "gradient_clip_val"],
+        lbfgs_memory             = conditions.loc[i, "lbfgs_memory"],
         do_line_search           = conditions.loc[i, "do_line_search"],
         stopping_threshold       = conditions.loc[i, "stopping_threshold"],
         divergence_threshold     = conditions.loc[i, "divergence_threshold"],
+        profiler                 = conditions.loc[i, "profiler"],
     )
+    end = timer()
+    conditions.loc[i, "walltime"] = end - start
+    conditions.loc[i, "num_epochs"] = trainer.logger._prev_step + 1
     for n,p in model.model.named_parameters():
         if n=="G.bias":
             Bhat = p.detach().numpy()
-            conditions.loc[i,"B_L1_norm"] = np.abs(Bhat).sum()
+            conditions.loc[i,"est_B_L1_norm"]  = np.abs(Bhat).mean()
         if n=="G.weight":
             Ghat = p.detach().numpy()
-            print("Estimate of G:")
-            print(Ghat)
-            conditions.loc[i,"G_L1_norm"] = np.abs(Ghat).sum()
-            conditions.loc[i,"G_L2_error"] = np.abs(Ghat - G).sum()
+            conditions.loc[i,"true_G_L1_norm"] = np.abs(G).mean()
+            conditions.loc[i,"est_G_L1_norm"]  = np.abs(Ghat).mean()
+            conditions.loc[i,"est_G_L1_error"] = np.abs(Ghat - G).mean()
+            conditions.loc[i,"true_G^S_L1_norm"] = np.abs(np.linalg.matrix_power(G, S)).mean()
+            conditions.loc[i,"est_G^S_L1_norm"]  = np.abs(np.linalg.matrix_power(Ghat, S)).mean()
+            conditions.loc[i,"est_G^S_L1_error"] = np.abs(np.linalg.matrix_power(Ghat, S) - np.linalg.matrix_power(G, S)).mean()
 
-# Tidy and save the output
-try:
-    conditions.sort_values(hyperparameters["experiment_name"], inplace=True)
-except KeyError:
-    pass
-conditions.to_csv("hyperparameterSweepLog.csv")
-with open("hyperparameterSweepLog.json", 'w') as jf:
-    jf.write(json.dumps(hyperparameters, indent=3))
+    # Tidy and save the output (once per loop to save partial progress)
+    try:
+        conditions.sort_values(hyperparameters["experiment_name"], inplace=True)
+    except KeyError:
+        pass
+    conditions.to_csv("hyperparameterSweepLog.csv")
+    with open("hyperparameterSweepLog.json", 'w') as jf:
+        jf.write(json.dumps(hyperparameters, indent=3))
+
+
+

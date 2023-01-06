@@ -1,0 +1,16 @@
+,B_L1_norm,G_L1_norm,G_L2_error,experiment_name,seed,S,dimension,initialization_method,regularization_parameter,max_epochs,learning_rate,do_early_stopping,optimizer,num_controls,gradient_clip_val,do_shuffle,do_line_search,stopping_threshold,divergence_threshold
+2,0.060715344,10.107493,35.12%,dimension,0,2,10,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+5,0.0007144961,10.104924,0.71%,dimension,1,2,10,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+8,0.00072187785,10.102755,0.64%,dimension,2,2,10,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+11,0.1290162,10.21189,77.30%,dimension,3,2,10,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+14,0.00107351,10.007526,0.76%,dimension,4,2,10,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+1,0.26321095,6.4314327,619.56%,dimension,0,2,5,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+4,0.0651007,4.8623223,41.76%,dimension,1,2,5,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+7,0.042638652,5.1323853,42.15%,dimension,2,2,5,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+10,0.41120166,7.5313206,598.48%,dimension,3,2,5,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+13,0.48322338,7.6127057,650.75%,dimension,4,2,5,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+0,0.007835435,2.031629,2.19%,dimension,0,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+3,0.0058932463,2.1471906,3.67%,dimension,1,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+6,0.010240873,1.9658666,11.03%,dimension,2,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+9,0.015982946,2.048948,6.27%,dimension,3,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
+12,0.0061462983,1.9815967,3.02%,dimension,4,2,2,identity,0.001,10000,0.0005,True,ADAM,10,,False,True,0.1,10000
