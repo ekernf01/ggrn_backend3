@@ -1,0 +1,93 @@
+{
+   "experiment_name": [
+      "low rank problem cases"
+   ],
+   "est_B_L1_norm": [
+      null
+   ],
+   "true_F_L1_norm": [
+      null
+   ],
+   "est_F_L1_norm": [
+      null
+   ],
+   "est_F_L1_error": [
+      null
+   ],
+   "est_QR_constraint_violation": [
+      null
+   ],
+   "num_epochs": [
+      null
+   ],
+   "initial_state": [
+      "random"
+   ],
+   "F_type": [
+      "low_rank"
+   ],
+   "include_treatment": [
+      false
+   ],
+   "seed": [
+      0
+   ],
+   "S": [
+      1
+   ],
+   "dimension": [
+      10
+   ],
+   "num_controls": [
+      10
+   ],
+   "low_dimensional_structure": [
+      "RGQ"
+   ],
+   "low_dimensional_training": [
+      "supervised",
+      "SVD"
+   ],
+   "G_initialization_method": [
+      "identity"
+   ],
+   "regularization_parameter": [
+      0.001
+   ],
+   "max_epochs": [
+      10000
+   ],
+   "batch_size": [
+      100000
+   ],
+   "learning_rate": [
+      "this is overwritten below"
+   ],
+   "do_early_stopping": [
+      true
+   ],
+   "optimizer": [
+      "L-BFGS"
+   ],
+   "gradient_clip_val": [
+      null
+   ],
+   "do_shuffle": [
+      false
+   ],
+   "do_line_search": [
+      true
+   ],
+   "lbfgs_memory": [
+      100
+   ],
+   "stopping_threshold": [
+      0.1
+   ],
+   "divergence_threshold": [
+      Infinity
+   ],
+   "profiler": [
+      null
+   ]
+}

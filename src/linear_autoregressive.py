@@ -25,6 +25,7 @@ class LinearAutoregressive(pl.LightningModule):
         regression_method,
         low_dimensional_structure,
         low_dimensional_training,
+        low_dimensional_value,
         learning_rate, 
         regularization_parameter,
         optimizer,
@@ -40,48 +41,101 @@ class LinearAutoregressive(pl.LightningModule):
         self.optimizer = optimizer
         self.do_line_search = do_line_search
         self.lbfgs_memory = lbfgs_memory
-        if regression_method == "linear":
-            self.G = torch.nn.Linear(n_genes, n_genes)
-        elif regression_method in {'multilayer_perceptron', 'mlp'}:
+
+        # Set up layer sizes, e.g. n_genes -> latent_dimension -> n_genes
+        if low_dimensional_structure is None or low_dimensional_structure.lower() == "none":
+            self.Q = torch.nn.Identity()
+            self.R = torch.nn.Identity()
+            if low_dimensional_training is not None:
+                print("low_dimensional_training will be ignored since low_dimensional_structure is 'none'.")
+                low_dimensional_training = None
+            if low_dimensional_value is not None:
+                print("low_dimensional_value will be ignored since low_dimensional_structure is 'none'.")
+                low_dimensional_value = None
+        elif low_dimensional_structure.lower() == "rgq":
+            if low_dimensional_value is None:
+                raise ValueError("low_dimensional_value must be the latent dimension, or a matrix of shape (latent_dim by n_genes).")
+            try:
+                latent_dimension = low_dimensional_value.shape[0]
+                assert latent_dimension <= n_genes, "latent dimension must be less than or equal to n_genes"
+            except AttributeError:
+                latent_dimension = low_dimensional_value
+                assert latent_dimension <= n_genes, "latent dimension must be less than or equal to n_genes"
+            # A Linear layer takes input dimension before output, so if
+            # L(x) = Ax and A is an N by G matrix, then L takes G first, not N.
+            self.Q = torch.nn.Linear(n_genes, latent_dimension, bias=False)
+            self.R = torch.nn.Linear(latent_dimension, n_genes, bias=False)
+        else:
+            raise ValueError(f"low_dimensional_structure must be 'none' or 'RGQ'; received {low_dimensional_structure}")
+
+        # Set up G, which projects forward one time-step in the latent space
+        if regression_method.lower() == "linear":
+            if low_dimensional_structure is not None and low_dimensional_structure != "none":
+                self.G = torch.nn.Linear(self.Q.weight.shape[0], self.Q.weight.shape[0])
+            else:
+                self.G = torch.nn.Linear(n_genes, n_genes)
+
+        elif regression_method.lower() in {'multilayer_perceptron', 'mlp'}:
             raise NotImplementedError("mlp is not implemented yet.")
         else:
             raise ValueError(f"regression_method must be 'linear' or 'mlp'. Value: {regression_method}")
-        
-        if low_dimensional_structure in "none":
-            if low_dimensional_training is not None:
-                print("low_dimensional_training will be ignored since low_dimensional_structure is 'none'.")
-        elif low_dimensional_structure in "RGQ":
-            raise NotImplementedError("Low-D structure is not implemented yet.")
-        else:
-            raise ValueError("regression_method must be 'none' or 'RGQ'")
-
-        if low_dimensional_training is None:
-            pass
-        elif low_dimensional_training == "supervised":
-            raise NotImplementedError()
-        elif low_dimensional_training == "PCA":
-            raise NotImplementedError()
-        elif low_dimensional_training == "fixed":
-            raise NotImplementedError()
-        else:
-            raise ValueError(f"low_dimensional_training must be 'supervised','PCA', 'fixed'. Value: {low_dimensional_training}")
-        
         self.initialize_g(initialization_method = initialization_method, initialization_value = initialization_value)
+
+        # Decide how to train & initialize the projection operator Q and its right inverse approximator R
+        if low_dimensional_training is None:
+            pass 
+        elif low_dimensional_training.lower() == "supervised":
+            # We'll absorb G into Q or R
+            self.G.requires_grad_(False)
+            # pytorch will optimize Q,R 
+            # we just need to initialize the weights.
+            # We start with random or user-provided R and we set Q = pinv(R). 
+            assert low_dimensional_value is not None
+            try:
+                low_dimensional_value = np.random.normal(size=self.Q.weight.shape) * math.sqrt(2) / math.sqrt(int(low_dimensional_value))
+            except TypeError: #it might already be a whole-ass matrix
+                pass
+            # If we don't copy here, we get a weird error: "view size is not compatible with input tensor's size and stride (at least one dimension spans across two contiguous subspaces). Use .reshape(...) instead."
+            low_dimensional_value = low_dimensional_value.T.copy()
+            self.R.weight = torch.nn.Parameter( torch.tensor(                 low_dimensional_value.astype(np.float32)   ) ) 
+            self.Q.weight = torch.nn.Parameter( torch.tensor( np.linalg.pinv( low_dimensional_value ).astype(np.float32) ) )
+        elif low_dimensional_training.lower() in ("fixed", "svd"):
+            # Make sure caller has provided projection matrix
+            # Fix R = pinv(Q) and tell torch not to update Q,R
+            assert low_dimensional_value is not None, "Please provide a projection matrix (e.g. motif counts)."
+            assert type(low_dimensional_value) != int, "Please provide a projection matrix (e.g. motif counts), not just a dimension."
+            np.testing.assert_array_equal(
+                low_dimensional_value.T.shape,      
+                self.R.weight.shape, 
+                err_msg = "low_dimensional_value must be an array with dimension (latent_dimension by n_genes)."
+            )
+            low_dimensional_value = low_dimensional_value.astype(np.float32)
+            with torch.no_grad():
+                self.R.weight = torch.nn.Parameter( torch.tensor(                 low_dimensional_value.T   ) ) 
+                self.Q.weight = torch.nn.Parameter( torch.tensor( np.linalg.pinv( low_dimensional_value.T ) ) )
+            self.Q.requires_grad_(False)
+            self.R.requires_grad_(False)
+        else:
+            raise ValueError(f"low_dimensional_training must be 'supervised' or 'fixed' or 'SVD'. Value: {low_dimensional_training}")
+        
         
 
     def forward(self, x, perturbations):
-        return P(self.G(P(x, perturbations)), perturbations)
+        x = P(x, perturbations)
+        x = x + self.R(self.G(self.Q(x)))
+        x = P(x, perturbations)
+        return x
 
     def training_step(self, input_batch):
-        loss = 0
+        rmse = 0
         batch_size = len(input_batch["treatment"]["metadata"]["perturbation"])
-        for i in range(batch_size):
-            perturbed_indices = [int(g)   for g in input_batch["treatment"]["metadata"]["perturbation_index"][i].split(",")]
+        for i in range(batch_size): 
+            perturbed_indices = [int(g) for g in input_batch["treatment"]["metadata"]["perturbation_index"][i].split(",")]
             perturbations = zip(
                 perturbed_indices,
                 [float(x) for x in input_batch["treatment"]["metadata"]["expression_level_after_perturbation"][i].split(",")],
             )
-            perturbations = [p for p in perturbations if p[0]!=-999] #sentinel value indicates this is a control sample
+            perturbations = [p for p in perturbations if p[0]!=-999] # sentinel value -999 indicates this is a control sample
             mask  = torch.tensor( [
                 0 if g in perturbed_indices else 1 
                 for g in range(len(input_batch["treatment"]["expression"][i]))
@@ -90,37 +144,44 @@ class LinearAutoregressive(pl.LightningModule):
                 # (electric slide voice) one hop this time. *BEWMP*
                 x_t = input_batch["treatment"]["expression"][i].clone()
                 x_t = self(x_t, perturbations)
-                loss += torch.linalg.norm(mask*(input_batch["treatment"]["expression"][i] - x_t))
+                rmse += torch.linalg.norm(mask*(input_batch["treatment"]["expression"][i] - x_t))
             if input_batch["treatment"]["metadata"]["is_treatment"][i]: 
                 # (electric slide voice) S hops this time. *BEWMP* *BEWMP* *BEWMP* *BEWMP* 
                 x_t = input_batch["matched_control"]["expression"][i].clone()
                 for _ in range(self.S):
                     x_t = self(x_t, perturbations)
-                loss += torch.linalg.norm(mask*(input_batch["treatment"]["expression"][i] - x_t))
+                rmse += torch.linalg.norm(mask*(input_batch["treatment"]["expression"][i] - x_t))
+            # We want Q and R to be approximately inverses
+            x_t = input_batch["treatment"]["expression"][i]
+
         lasso_term = torch.abs(
-            [param - torch.eye(param.shape[0]) if name == "weight" else param for name, param in self.G.named_parameters() ][0]
+            [
+                param for name, param in self.G.named_parameters() 
+            ][0]
         ).sum()
-        self.log("mse", loss, batch_size = batch_size, logger=True)
-        loss += self.regularization_parameter*lasso_term
-        self.log("training_loss", loss, batch_size = batch_size, logger=True)
+        loss = rmse + self.regularization_parameter*lasso_term
+        self.log("rmse", rmse, batch_size = batch_size, logger=True)
         self.log("lasso_term", lasso_term, batch_size = batch_size, logger=True)
+        self.log("training_loss", loss, batch_size = batch_size, logger=True)
         return loss
 
     def configure_optimizers(self):
-        if self.optimizer == "L-BFGS":
+        if self.optimizer.upper() == "L-BFGS":
             return torch.optim.LBFGS(self.parameters(), lr=self.learning_rate, line_search_fn = 'strong_wolfe' if self.do_line_search else None, history_size=self.lbfgs_memory )        
-        elif self.optimizer == "ADAM":
+        elif self.optimizer.upper() == "ADAM":
             return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        elif self.optimizer == "ADAMW":
+        elif self.optimizer.upper() == "ADAMW":
             return torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01, amsgrad=False)
-        elif self.optimizer == "AMSGRAD":
+        elif self.optimizer.upper() == "AMSGRAD":
             return torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.01, amsgrad=True)
         else:
             raise ValueError(f"Optimizer must be 'ADAM' or 'L-BFGS'. Value: {self.optimizer}")
 
     def initialize_g(self, initialization_method, initialization_value = None):
         for name, param in self.named_parameters():
-            if initialization_method in {"kaiming", "he"}:
+            if not name.startswith("G"):
+                continue
+            if initialization_method.lower() in {"kaiming", "he"}:
                 # Initialization suitable for use with leaky ReLU, from Kaiming He et al 2015.
                 # From the official Pytorch website, https://pytorch-lightning.readthedocs.io/en/stable/notebooks/course_UvA-DL/03-initialization-and-optimization.html
                 # Original code author: Phillip Lippe
@@ -131,12 +192,12 @@ class LinearAutoregressive(pl.LightningModule):
                     param.data.normal_(0, 1 / math.sqrt(param.shape[1]))
                 else:
                     param.data.normal_(0, math.sqrt(2) / math.sqrt(param.shape[1]))
-            elif initialization_method in {"identity"}:
+            elif initialization_method.lower() in {"identity"}:
                 if name.endswith(".bias"):
                     param.data.fill_(0)
                 else:
-                    param.data.copy_(torch.eye(param.shape[0]))                
-            elif initialization_method in {"user"}:
+                    param.data.copy_(torch.tensor(np.eye(param.shape[1])))
+            elif initialization_method.lower() in {"user"}:
                 if not type(initialization_value) == np.ndarray:
                     raise TypeError(f"Expected np.ndarray for initialization_value; received {type(initialization_value)}")
                 if not initialization_value.shape == (param.shape[0],param.shape[0]):

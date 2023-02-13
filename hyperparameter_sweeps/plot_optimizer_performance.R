@@ -13,6 +13,9 @@ plot_performance = function(
     "B_L1_norm",
     "G_L1_norm"	,
     "G_L2_error",
+    "est_Q_L1_error",          
+    "est_F_L1_error",             
+    "est_QR_constraint_violation",
     "num_epochs",
     "walltime"
   ),
