@@ -1,0 +1,20 @@
+package:
+     name: ggrn_backend3
+
+source:
+     path: .    # I use a tool called GitFront to allow kinda sorta secret read access to a private GitHub repo via URL.  
+
+requirements:
+     run:
+        - pytorch
+        - pytorch-lightning 
+        - numpy 
+        - anndata
+        - pandas
+        - numpy
+        - scikit-learn
+
+about:
+     home: https://github.com/ekernf01/ggrn_backend3
+
+
