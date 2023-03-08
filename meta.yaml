@@ -1,20 +1,50 @@
+{% set name = "ggrn_backend3" %}
+{% set version = "0.0.3" %}
+
 package:
-     name: ggrn_backend3
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
 
 source:
-     path: .    # I use a tool called GitFront to allow kinda sorta secret read access to a private GitHub repo via URL.  
+  url: "https://test.pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz"
+  sha256: 8be34b16be487460f5589ead8aac882a2cda0124225754a3029b6bc64773d785
+
+build:
+  number: 0
+  script: "{{ PYTHON }} -m pip install . -vv"
 
 requirements:
-     run:
-        - pytorch
-        - pytorch-lightning 
-        - numpy 
-        - anndata
-        - pandas
-        - numpy
-        - scikit-learn
+  host:
+    - anndata
+    - numpy
+    - pandas
+    - pip
+    - python
+    - pytorch-lightning
+    - scikit-learn
+    - pytorch
+  run:
+    - anndata
+    - numpy
+    - pandas
+    - python
+    - pytorch-lightning
+    - scikit-learn
+    - pytorch
+
+test:
+  imports:
+    - ggrn_backend3
 
 about:
-     home: https://github.com/ekernf01/ggrn_backend3
+  home: "https://test.pypi.org/pypi/ggrn_backend3/0.0.1"
+  license: UNKNOWN
+  license_family: OTHER
+  license_file: 
+  summary: "Autoregressive gene regulatory network modeling"
+  doc_url: 
+  dev_url: 
 
-
+extra:
+  recipe-maintainers:
+    - your-github-id-here

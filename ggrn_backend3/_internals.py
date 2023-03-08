@@ -1,4 +1,5 @@
 import torch
+import torch.nn.init as init
 import pytorch_lightning as pl
 import numpy as np
 import math 
@@ -13,7 +14,7 @@ def P(x: torch.tensor, perturbations: list) -> torch.tensor:
         torch.tensor: Gene expression with targeted gene set to prescribed level. 
     """
     for p in perturbations:
-        x[p[0]] = p[1]
+        x[p[0]] = float(p[1])
     return x
 
 
@@ -26,6 +27,7 @@ class LinearAutoregressive(pl.LightningModule):
         low_dimensional_structure,
         low_dimensional_training,
         low_dimensional_value,
+        loss_function,
         learning_rate, 
         regularization_parameter,
         optimizer,
@@ -34,6 +36,25 @@ class LinearAutoregressive(pl.LightningModule):
         do_line_search,
         lbfgs_memory,
     ):
+        """Linear autoregressive model
+
+        Args:
+            n_genes (_type_): Data dimension
+            S (_type_): _description_
+            regression_method (_type_): _description_
+            low_dimensional_structure (_type_): _description_
+            low_dimensional_training (_type_): _description_
+            low_dimensional_value (_type_): _description_
+            loss_function (int): Measures deviation between observed and predicted. Try torch.nn.HuberLoss().
+            learning_rate (_type_): _description_
+            regularization_parameter (_type_): _description_
+            optimizer (_type_): _description_
+            initialization_method (_type_): _description_
+            initialization_value (_type_): _description_
+            do_line_search (_type_): _description_
+            lbfgs_memory (_type_): _description_
+
+        """
         super().__init__()
         self.S = S
         self.learning_rate = learning_rate
@@ -41,11 +62,13 @@ class LinearAutoregressive(pl.LightningModule):
         self.optimizer = optimizer
         self.do_line_search = do_line_search
         self.lbfgs_memory = lbfgs_memory
+        self.low_dimensional_training = low_dimensional_training
+        self.loss_function = loss_function
 
         # Set up layer sizes, e.g. n_genes -> latent_dimension -> n_genes
         if low_dimensional_structure is None or low_dimensional_structure.lower() == "none":
-            self.Q = torch.nn.Identity()
-            self.R = torch.nn.Identity()
+            self.Q = torch.nn.Identity(dtype = torch.float32)
+            self.R = torch.nn.Identity(dtype = torch.float32)
             if low_dimensional_training is not None:
                 print("low_dimensional_training will be ignored since low_dimensional_structure is 'none'.")
                 low_dimensional_training = None
@@ -61,19 +84,21 @@ class LinearAutoregressive(pl.LightningModule):
             except AttributeError:
                 latent_dimension = low_dimensional_value
                 assert latent_dimension <= n_genes, "latent dimension must be less than or equal to n_genes"
+            # Note there is no bias in these layers.
+            # Regarding the shape:
             # A Linear layer takes input dimension before output, so if
             # L(x) = Ax and A is an N by G matrix, then L takes G first, not N.
-            self.Q = torch.nn.Linear(n_genes, latent_dimension, bias=False)
-            self.R = torch.nn.Linear(latent_dimension, n_genes, bias=False)
+            self.Q = torch.nn.Linear(n_genes, latent_dimension, bias=False, dtype = torch.float32)
+            self.R = torch.nn.Linear(latent_dimension, n_genes, bias=False, dtype = torch.float32)
         else:
             raise ValueError(f"low_dimensional_structure must be 'none' or 'RGQ'; received {low_dimensional_structure}")
 
         # Set up G, which projects forward one time-step in the latent space
         if regression_method.lower() == "linear":
-            if low_dimensional_structure is not None and low_dimensional_structure != "none":
-                self.G = torch.nn.Linear(self.Q.weight.shape[0], self.Q.weight.shape[0])
+            if low_dimensional_structure is not None and low_dimensional_structure.lower() != "none":
+                self.G = torch.nn.Linear(self.Q.weight.shape[0], self.Q.weight.shape[0], dtype=torch.float32)
             else:
-                self.G = torch.nn.Linear(n_genes, n_genes)
+                self.G = torch.nn.Linear(n_genes, n_genes, dtype=torch.float32)
 
         elif regression_method.lower() in {'multilayer_perceptron', 'mlp'}:
             raise NotImplementedError("mlp is not implemented yet.")
@@ -82,88 +107,94 @@ class LinearAutoregressive(pl.LightningModule):
         self.initialize_g(initialization_method = initialization_method, initialization_value = initialization_value)
 
         # Decide how to train & initialize the projection operator Q and its right inverse approximator R
-        if low_dimensional_training is None:
-            pass 
-        elif low_dimensional_training.lower() == "supervised":
-            # We'll absorb G into Q or R
-            self.G.requires_grad_(False)
-            # pytorch will optimize Q,R 
-            # we just need to initialize the weights.
-            # We start with random or user-provided R and we set Q = pinv(R). 
-            assert low_dimensional_value is not None
-            try:
-                low_dimensional_value = np.random.normal(size=self.Q.weight.shape) * math.sqrt(2) / math.sqrt(int(low_dimensional_value))
-            except TypeError: #it might already be a whole-ass matrix
-                pass
-            # If we don't copy here, we get a weird error: "view size is not compatible with input tensor's size and stride (at least one dimension spans across two contiguous subspaces). Use .reshape(...) instead."
-            low_dimensional_value = low_dimensional_value.T.copy()
-            self.R.weight = torch.nn.Parameter( torch.tensor(                 low_dimensional_value.astype(np.float32)   ) ) 
-            self.Q.weight = torch.nn.Parameter( torch.tensor( np.linalg.pinv( low_dimensional_value ).astype(np.float32) ) )
-        elif low_dimensional_training.lower() in ("fixed", "svd"):
-            # Make sure caller has provided projection matrix
-            # Fix R = pinv(Q) and tell torch not to update Q,R
-            assert low_dimensional_value is not None, "Please provide a projection matrix (e.g. motif counts)."
-            assert type(low_dimensional_value) != int, "Please provide a projection matrix (e.g. motif counts), not just a dimension."
-            np.testing.assert_array_equal(
-                low_dimensional_value.T.shape,      
-                self.R.weight.shape, 
-                err_msg = "low_dimensional_value must be an array with dimension (latent_dimension by n_genes)."
-            )
-            low_dimensional_value = low_dimensional_value.astype(np.float32)
-            with torch.no_grad():
-                self.R.weight = torch.nn.Parameter( torch.tensor(                 low_dimensional_value.T   ) ) 
+        if low_dimensional_structure.lower() == "rgq": 
+            if low_dimensional_training is None:
+                pass 
+            elif low_dimensional_training.lower() == "supervised":
+                # Absorb G into R
+                self.G = torch.nn.Identity()
+                # pytorch will optimize Q,R 
+                # we just need to initialize the weights.
+                # We start with random or user-provided R and we set Q = pinv(R). 
+                assert low_dimensional_value is not None
+                try:
+                    low_dimensional_value = np.random.normal(size=self.Q.weight.shape) * math.sqrt(2) / math.sqrt(int(low_dimensional_value))
+                except TypeError: #it might already be a whole-ass matrix
+                    pass
+                # If we don't copy here, we get a weird error: "view size is not compatible with input tensor's size and stride (at least one dimension spans across two contiguous subspaces). Use .reshape(...) instead."
+                low_dimensional_value = low_dimensional_value.T.copy()
+                self.R.weight = torch.nn.Parameter( torch.as_tensor(                 low_dimensional_value.astype(np.float32)   ) ) 
+                self.Q.weight = torch.nn.Parameter( torch.as_tensor( np.linalg.pinv( low_dimensional_value ).astype(np.float32) ) )
+            elif low_dimensional_training.lower() in ("fixed", "svd"):
+                # Make sure caller has provided projection matrix
+                # Fix R = pinv(Q) and tell torch not to update Q,R
+                assert low_dimensional_value is not None, "Please provide a projection matrix (e.g. motif counts)."
+                assert type(low_dimensional_value) != int, "Please provide a projection matrix (e.g. motif counts), not just a dimension."
+                np.testing.assert_array_equal(
+                    low_dimensional_value.T.shape,      
+                    self.R.weight.shape, 
+                    err_msg = "low_dimensional_value must be an array with dimension (latent_dimension by n_genes)."
+                )
+                low_dimensional_value = low_dimensional_value.astype(np.float32)
+                self.R.weight = torch.nn.Parameter( torch.as_tensor(                 low_dimensional_value.T   ) ) 
                 self.Q.weight = torch.nn.Parameter( torch.tensor( np.linalg.pinv( low_dimensional_value.T ) ) )
-            self.Q.requires_grad_(False)
-            self.R.requires_grad_(False)
-        else:
-            raise ValueError(f"low_dimensional_training must be 'supervised' or 'fixed' or 'SVD'. Value: {low_dimensional_training}")
+                self.Q.requires_grad_(False)
+                self.R.requires_grad_(False)
+            else:
+                raise ValueError(f"low_dimensional_training must be 'supervised' or 'fixed' or 'SVD'. Value: {low_dimensional_training}")
         
         
 
     def forward(self, x, perturbations):
         x = P(x, perturbations)
-        x = x + self.R(self.G(self.Q(x)))
+        r = self.Q(x)
+        r = self.G(r)
+        r = self.R(r)
+        x = x + r
         x = P(x, perturbations)
         return x
 
     def training_step(self, input_batch):
         rmse = 0
-        batch_size = len(input_batch["treatment"]["metadata"]["perturbation"])
+        expression, metadata, matched_control_expression = input_batch
+        batch_size = len(metadata['index'])
         for i in range(batch_size): 
-            perturbed_indices = [int(g) for g in input_batch["treatment"]["metadata"]["perturbation_index"][i].split(",")]
+            perturbed_indices = [int(g) for g in metadata["perturbation_index"][i].split(",")]
             perturbations = zip(
                 perturbed_indices,
-                [float(x) for x in input_batch["treatment"]["metadata"]["expression_level_after_perturbation"][i].split(",")],
+                [float(x) for x in metadata["expression_level_after_perturbation"][i].split(",")],
             )
             perturbations = [p for p in perturbations if p[0]!=-999] # sentinel value -999 indicates this is a control sample
-            mask  = torch.tensor( [
+            mask  = torch.as_tensor( [
                 0 if g in perturbed_indices else 1 
-                for g in range(len(input_batch["treatment"]["expression"][i]))
+                for g in range(len(expression[i]))
             ])
-            if input_batch["treatment"]["metadata"]["is_steady_state"][i]: 
+            if metadata["is_steady_state"][i]: 
                 # (electric slide voice) one hop this time. *BEWMP*
-                x_t = input_batch["treatment"]["expression"][i].clone()
+                x_t = expression[i].clone()
                 x_t = self(x_t, perturbations)
-                rmse += torch.linalg.norm(mask*(input_batch["treatment"]["expression"][i] - x_t))
-            if input_batch["treatment"]["metadata"]["is_treatment"][i]: 
+                rmse += self.loss_function(mask*expression[i], x_t)
+            else:
                 # (electric slide voice) S hops this time. *BEWMP* *BEWMP* *BEWMP* *BEWMP* 
-                x_t = input_batch["matched_control"]["expression"][i].clone()
+                x_t = matched_control_expression[i].clone()
                 for _ in range(self.S):
                     x_t = self(x_t, perturbations)
-                rmse += torch.linalg.norm(mask*(input_batch["treatment"]["expression"][i] - x_t))
-            # We want Q and R to be approximately inverses
-            x_t = input_batch["treatment"]["expression"][i]
+                rmse += self.loss_function(mask*expression[i], x_t)
 
-        lasso_term = torch.abs(
-            [
-                param for name, param in self.G.named_parameters() 
-            ][0]
-        ).sum()
-        loss = rmse + self.regularization_parameter*lasso_term
+        lasso_term = 0.0
+        for weights_to_penalize in (
+            self.G.named_parameters(),
+            self.Q.named_parameters(),
+            self.R.named_parameters(),
+        ):
+            for name, param in weights_to_penalize:
+                if name=="weight": #skip bias and skip Identity blocks
+                    lasso_term += torch.abs(param).sum()
+        loss_value = rmse + self.regularization_parameter*lasso_term
         self.log("rmse", rmse, batch_size = batch_size, logger=True)
         self.log("lasso_term", lasso_term, batch_size = batch_size, logger=True)
-        self.log("training_loss", loss, batch_size = batch_size, logger=True)
-        return loss
+        self.log("training_loss", loss_value, batch_size = batch_size, logger=True)
+        return loss_value
 
     def configure_optimizers(self):
         if self.optimizer.upper() == "L-BFGS":
@@ -187,24 +218,22 @@ class LinearAutoregressive(pl.LightningModule):
                 # Original code author: Phillip Lippe
                 # Original code license: CC-by-SA
                 if name.endswith(".bias"):
-                    param.data.fill_(0)
-                elif name.startswith("layers.0"):  # The first layer does not have ReLU applied on its input
-                    param.data.normal_(0, 1 / math.sqrt(param.shape[1]))
+                    init.zeros_(param)
                 else:
-                    param.data.normal_(0, math.sqrt(2) / math.sqrt(param.shape[1]))
+                    init.kaiming_uniform_(param)
             elif initialization_method.lower() in {"identity"}:
                 if name.endswith(".bias"):
-                    param.data.fill_(0)
+                    init.zeros_(param)
                 else:
-                    param.data.copy_(torch.tensor(np.eye(param.shape[1])))
+                    init.eye_(param) 
             elif initialization_method.lower() in {"user"}:
                 if not type(initialization_value) == np.ndarray:
                     raise TypeError(f"Expected np.ndarray for initialization_value; received {type(initialization_value)}")
                 if not initialization_value.shape == (param.shape[0],param.shape[0]):
                     raise np.linalg.LinAlgError(f"Shape for initialization_value must be {(param.shape[0],param.shape[0])}. Received {initialization_value.shape}.")
                 if name.endswith(".bias"):
-                    param.data.fill_(0)
+                    init.zeros_(param)
                 else:
-                    param.data.copy_(torch.tensor(initialization_value))                
+                    init.constant_(param, torch.tensor(initialization_value))            
             else:
                 raise ValueError(f"'initialization_method' may be 'kaiming' or 'identity' or 'user'; received {initialization_method}")
