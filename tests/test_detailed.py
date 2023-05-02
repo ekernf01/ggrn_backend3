@@ -66,11 +66,12 @@ def test_correctness_in_detail(conditions, result_csv):
             low_dimensional_training  = conditions.at[i,"low_dimensional_training"],
             # Since this is a unit test, we can cheat and reveal the true R if needed.
             low_dimensional_value     = R.T if conditions.at[i, "low_dimensional_training"].lower() == "fixed" else latent_dimension,        
-            network = None,     
+            network = None,
+            assume_unrecognized_genes_are_controls = False, 
         )
 
         trainer = model.train(
-            experiment_name           = conditions.at[i,"experiment_name"],
+            experiment_name           = conditions.at[i, "experiment_name"],
             max_epochs                = conditions.at[i, "max_epochs"],
             batch_size                = conditions.at[i, "batch_size"],
             learning_rate             = conditions.at[i, "learning_rate"],
@@ -231,10 +232,10 @@ speed_test_config = set_up_trials(
     }
 )
 class TestBackend3(unittest.TestCase):
-    # def test_correctness(self):
-    #     test_correctness_in_detail(conditions=correctness_test_config, result_csv="ggrnBackend3UnitTestDetails.csv")
-    def test_speed(self):
-        test_correctness_in_detail(speed_test_config, result_csv="ggrnBackend3SpeedTest.csv")
+    def test_correctness(self):
+        test_correctness_in_detail(conditions=correctness_test_config, result_csv="ggrnBackend3UnitTestDetails.csv")
+    # def test_speed(self):
+    #     test_correctness_in_detail(speed_test_config, result_csv="ggrnBackend3SpeedTest.csv")
 
 if __name__ == '__main__':
     unittest.main()

@@ -157,7 +157,7 @@ class LinearAutoregressive(pl.LightningModule):
     def training_step(self, input_batch):
         rmse = 0
         expression, metadata, matched_control_expression = input_batch
-        batch_size = len(metadata['index'])
+        batch_size = len(metadata['perturbation'])
         for i in range(batch_size): 
             perturbed_indices = [int(g) for g in metadata["perturbation_index"][i].split(",")]
             perturbations = zip(

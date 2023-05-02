@@ -14,14 +14,17 @@ from sklearn.neighbors import KDTree
 
 class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
     """Data loader that chops up an AnnData and feeds it to PyTorch"""
-    def __init__(self, adata: anndata.AnnData, matching_method: str) -> None:
+    def __init__(self, adata: anndata.AnnData, matching_method: str, assume_unrecognized_genes_are_controls: bool) -> None:
         """Data loader that chops up an AnnData and feeds it to PyTorch
 
         Args:
             adata (anndata.AnnData): Perturbation data.
             matching_method (str): How to match controls to each treated sample. Currently accepts "user"; future plans include "random" and "closest"
+            assume_unrecognized_genes_are_controls (bool): if True, all unrecognized entries of adata.obs["perturbation"] are treated as controls. 
+                If False, only "control" is allowed and any other perturbation name must be a gene name in adata.
         """
         super().__init__()
+        self.assume_unrecognized_genes_are_controls = assume_unrecognized_genes_are_controls
         self.adata = adata
         self.adata.X = self.adata.X.astype(np.float32)
         self.adata.var["numeric_index"] = [i for i in range(self.adata.var.shape[0])]
@@ -77,10 +80,10 @@ class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
     def get_index_from_gene(self, g):
         if g in self.adata.var_names:
             return self.adata.var.loc[g, "numeric_index"]  
-        elif g.lower()=="control":
+        elif g.lower()=="control" or not self.assume_unrecognized_genes_are_controls:
             return -999 #sentinel value indicates this is a control
         else:
-            raise KeyError(f"Cannot find gene named {g}, and so it cannot be perturbed.")
+            raise KeyError(f"Cannot find gene named {g}, and so it cannot be perturbed. Use 'control' for unperturbed observations or set assume_unrecognized_genes_are_controls=True.")
 
 def MatchControls(train_data: anndata.AnnData, matching_method: str):
     if matching_method.lower() == "closest":
@@ -133,8 +136,9 @@ class GGRNAutoregressiveModel:
         low_dimensional_value = 20,
         loss_function = None,
         network = None,
+        assume_unrecognized_genes_are_controls = False,
     ):
-        self.train_data = AnnDataMatchedControlsDataSet(train_data, matching_method)
+        self.train_data = AnnDataMatchedControlsDataSet(train_data, matching_method, assume_unrecognized_genes_are_controls=assume_unrecognized_genes_are_controls)
         self.model = None
         self.network = network
         self.model = None,
@@ -301,18 +305,19 @@ class GGRNAutoregressiveModel:
             pass
         predictions = starting_expression.copy()
 
-        def get_idx_from_gene(g):
-            if not g in set(self.train_data.adata.var_names):
-                raise KeyError(f"Cannot simulate perturbation of gene {g}; it is not in the training data.")
-            return np.where(g==self.train_data.adata.var_names)
-
-        for i,p in enumerate(perturbations):
+        # Use this when downstream code is fine with missing values among ints
+        def permissive_int(x):
             try:
-                pi = np.array([get_idx_from_gene(g) for g in p[0].split(",")])
-                pv = np.array([int(x)               for x in str(p[1]).split(",")])
-            except KeyError:
-                assert p[0].lower()=="control", f"Cannot perturb {p[0]}: gene not found in data (use 'control' for no perturbation)."
-                pi = pv = np.array([])
+                return int(x)
+            except ValueError:
+                return np.NaN
+            
+        for i,p in enumerate(perturbations):
+            pv = np.array([permissive_int(x)                      for x in str(p[1]).split(",")])
+            pi = np.array([self.train_data.get_index_from_gene(g) for g in p[0].split(",")])
+            not_control = pi != -999
+            pi = pi[not_control]
+            pv = pv[not_control]
             predictions[i,:] = self.predict_one_sample(
                 starting_expression = starting_expression[i, :].X.toarray().squeeze(), 
                 perturbed_indices = pi,
@@ -330,7 +335,7 @@ class GGRNAutoregressiveModel:
                 p[0].lower()=="control",
                 p[0].lower()!="control",
                 p[0],
-                p[1],
+                np.float(p[1]),
             )
         return predictions
 
