@@ -12,6 +12,12 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.neighbors import KDTree
 
+# We assume this is run from Eric's whole-project-all-repos directory or from the location of this script.
+try:
+    os.chdir("ggrn_backend3/tests")
+except FileNotFoundError:
+    pass
+
 class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
     """Data loader that chops up an AnnData and feeds it to PyTorch"""
     def __init__(self, adata: anndata.AnnData, matching_method: str, assume_unrecognized_genes_are_controls: bool) -> None:
@@ -257,7 +263,6 @@ class GGRNAutoregressiveModel:
             ),
             max_epochs=int(max_epochs),
             accelerator=device,   
-            track_grad_norm = 2, 
             gradient_clip_val = gradient_clip_val,
             deterministic = True,
             callbacks= (
@@ -370,12 +375,13 @@ class GGRNAutoregressiveModel:
 def simulate_autoregressive(
     num_controls_per_group = 2, 
     num_control_groups = 2 ,
+    include_treatment = True,
+    F = None,
     num_features = 5, 
     seed = 0, 
     num_steps = 1, 
     initial_state = "random",
     F_type = "random",
-    include_treatment = True,
     latent_dimension = None,
 ):
     """Simulate data from an autoregressive model of the sort ggrn_backend3 assumes. 
@@ -383,29 +389,58 @@ def simulate_autoregressive(
     Args:
         num_controls_per_group (int, optional): How many control samples in each group. Defaults to 2.
         num_control_groups (int, optional): How many groups of control samples. Defaults to 2.
+        include_treatment (bool, optional): If true, copy each control sample num_features times and perturb one feature in each of the new groups.
+            Defaults to True.
+        F (np.array, optional): The transition matrix. If you specify this, the remaining options are disregarded.
         num_features (int, optional): Data dimension. Defaults to 5.
         seed (int, optional): Used to make repeatable random data. Defaults to 0.
         num_steps (int, optional): Also called S in the mathematical specs. How many time-steps forward to "run" it. Defaults to 1.
         initial_state (str, optional): Can be "random" or "identity". For some purposes it's useful to start with an identity matrix. Defaults to "random".
         F_type (str, optional): F is the transition matrix -- see the mathematical specs for more details. Can be "random" or "low-rank" or "zero". 
             Defaults to "random".
-        include_treatment (bool, optional): If true, copy each control sample num_features times and perturb one feature in each of the new groups.
-            Defaults to True.
         latent_dimension (int, optional): rank of F if F_type is "low_rank"; otherwise not used. Defaults to half of num_features, rounded up.
 
     Returns:
         tuple: linear_autoregressive, R,G,Q,F, latent_dimension where linear_autoregressive is an 
             AnnData, R,G,Q,F are transition matrices or factors thereof (F=RGQ), and latent_dimension is the rank of F.
     """
-    if initial_state == "identity":
-        num_controls_per_group = num_features
-    # This is a pretty normal simulation combining controls and perturbed samples, with linear propagation of perturbation effects.
+    # Set up transition matrix unless user-provided
+    if F is not None:
+        latent_dimension = num_features = F.shape[0]
+        Q = np.eye(num_features)
+        R = np.eye(num_features)
+        G = F
+        # F is defined
+    else:
+        if latent_dimension is None:
+            latent_dimension = int(round(num_features/2))
+        if F_type == "random":
+            Q = np.eye(num_features)
+            R = np.eye(num_features)
+            F = G = np.random.random((num_features,num_features)) 
+        elif F_type == "low_rank":
+            R = np.random.random((num_features, latent_dimension))
+            Q = R.T
+            G = np.eye(latent_dimension)
+            F = R.dot(G.dot(Q))
+        elif F_type == "zero":
+            Q = np.eye(num_features)
+            R = np.eye(num_features)
+            F = G = np.zeros((num_features, num_features))
+        else:
+            raise ValueError(f"F_type must be 'random' or 'low_rank' or 'zero'; received {initial_state}.")
+
+    # Set up observation metadata
+    # This is a pretty normal simulation combining controls and perturbed samples, with linear propagation of 
+    # perturbation effects.
     # The weirdest naming decision here is we mark some samples as "treatment", even though no gene is perturbed.
     # Even tho there is no treatment, the below code will only advance them forward in time if they are labeled as treated. 
-    # We'll fix this right before returning the object.
+    # We'll fix this right before returning the object -- they will be marked as controls.
     #
-    # Also: we train on input-output pairs. The first element of each pair is never used as output. So, its "matched_control" must be nan.
-
+    # Also: we train on input-output pairs. The first element of each pair is never used as output. 
+    # So, its "matched_control" must be nan.
+    if initial_state == "identity":
+        num_controls_per_group = num_features
     num_treatment_types = num_features if include_treatment else 0
     num_controls = num_controls_per_group*num_control_groups
     metadata = pd.DataFrame({
@@ -422,6 +457,8 @@ def simulate_autoregressive(
     })
     metadata["matched_control"] = metadata["matched_control"].round().astype('Int64')
     np.random.seed(seed)
+    
+    # Define starting states
     if initial_state == "random":
         all_controls = np.random.random((num_controls, num_features))
     elif initial_state == "identity":
@@ -429,25 +466,7 @@ def simulate_autoregressive(
     else:
         raise ValueError(f"initial_state must be 'random' or 'identity'; received {initial_state}.")
 
-    if latent_dimension is None:
-        latent_dimension = int(round(num_features/2))
-    if F_type == "random":
-        Q = np.eye(num_features)
-        R = np.eye(num_features)
-        F = G = np.random.random((num_features,num_features)) 
-    elif F_type == "low_rank":
-        R = np.random.random((num_features, latent_dimension))
-        Q = R.T
-        G = np.eye(latent_dimension)
-        F = R.dot(G.dot(Q))
-    elif F_type == "zero":
-        Q = np.eye(num_features)
-        R = np.eye(num_features)
-        F = G = np.zeros((num_features, num_features))
-    else:
-        raise ValueError(f"F_type must be 'random' or 'low_rank' or 'zero'; received {initial_state}.")
-        
-
+    # Define simulation logic
     def perturb(one_control, perturbation, expression_level_after_perturbation):
         x = one_control.copy()
         if int(perturbation) >= 0:

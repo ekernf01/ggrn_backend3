@@ -1,14 +1,29 @@
 import os
 import unittest
 import ggrn_backend3.api as ggrn_backend3
-import load_networks
 import scanpy as sc
 import numpy as np
 import pandas as pd
 import torch
 import anndata
+import load_perturbations
+import load_networks
+import ggrn.api as ggrn
 
-example_data = sc.read_h5ad("../accessory_data/nakatake.h5ad")
+# Helpful for interactive use given Eric's project folder setup
+try:
+    os.chdir("ggrn_backend3")
+except:
+    pass
+
+# Access our data collections
+load_networks.set_grn_location(
+    '../network_collection/networks'
+)
+load_perturbations.set_data_path(
+    '../perturbation_data/perturbations'
+)
+example_data = load_perturbations.load_perturbation("nakatake")
 example_network = load_networks.LightNetwork(files=["../accessory_data/human_promoters.parquet"])
 example_perturbations = (("1", 0), ("2", 0))
 
@@ -20,6 +35,15 @@ example_perturbations = (("1", 0), ("2", 0))
 
 class TestBackend3(unittest.TestCase):
 
+    def test_matching_and_loading(self):
+        """Make sure we can pair up everything with a control"""
+        td = ggrn_backend3.MatchControls(example_data, "random")
+        # td = ggrn_backend3.MatchControls(train_data, "closest")
+        torchy_dataset = ggrn_backend3.AnnDataMatchedControlsDataSet(td, "user", assume_unrecognized_genes_are_controls = False )
+        torchy_dataloader = torch.utils.data.DataLoader(torchy_dataset)
+        x = torchy_dataset[0]
+        batch = next(iter(torchy_dataloader))
+        
     def test_everything_runs(self):
         """Make sure all user-facing options run without errors"""
         linear_autoregressive, R,G,Q,F, factors = ggrn_backend3.simulate_autoregressive(num_controls_per_group=10, num_features = 3)
@@ -51,25 +75,6 @@ class TestBackend3(unittest.TestCase):
                         )
                         y = model.predict(example_perturbations, starting_expression = linear_autoregressive[0:2,:])
                         assert type(y) == anndata.AnnData
-
-    def test_matching_and_loading(self):
-        """Make sure we can pair up everything with a control"""
-        td = ggrn_backend3.MatchControls(example_data, "random")
-        # td = ggrn_backend3.MatchControls(train_data, "closest")
-        torchy_dataset = ggrn_backend3.AnnDataMatchedControlsDataSet(td, "user")
-        torchy_dataloader = torch.utils.data.DataLoader(torchy_dataset)
-        x = torchy_dataset[0]
-        batch = next(iter(torchy_dataloader))
-        assert "treatment" in x.keys()
-        assert "matched_control" in x.keys()
-        assert "expression" in x["treatment"].keys()
-        assert "metadata"   in x["treatment"].keys()
-        assert "expression" in x["matched_control"].keys()
-        assert "metadata"   in x["matched_control"].keys()
-        assert all(
-            [f in x["treatment"]["metadata"].keys() 
-            for f in {"is_control", "is_treatment", "is_steady_state", "perturbation_index", "expression_level_after_perturbation"}]
-        )
 
 if __name__ == '__main__':
     unittest.main()

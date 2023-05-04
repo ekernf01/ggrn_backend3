@@ -1,5 +1,5 @@
 {% set name = "ggrn_backend3" %}
-{% set version = "0.0.3" %}
+{% set version = "0.0.4" %}
 
 package:
   name: "{{ name|lower }}"
@@ -23,6 +23,7 @@ requirements:
     - pytorch-lightning
     - scikit-learn
     - pytorch
+    - tensorboard
   run:
     - anndata
     - numpy
@@ -31,13 +32,14 @@ requirements:
     - pytorch-lightning
     - scikit-learn
     - pytorch
+    - tensorboard
 
 test:
   imports:
     - ggrn_backend3
 
 about:
-  home: "https://test.pypi.org/pypi/ggrn_backend3/0.0.1"
+  home: "https://test.pypi.org/pypi/ggrn_backend3/{{ version }}"
   license: UNKNOWN
   license_family: OTHER
   license_file: 
@@ -47,4 +49,4 @@ about:
 
 extra:
   recipe-maintainers:
-    - your-github-id-here
+    - ekernf01

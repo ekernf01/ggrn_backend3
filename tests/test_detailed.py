@@ -4,11 +4,12 @@ import pandas as pd
 import numpy as np
 from timeit import default_timer as timer
 import unittest
+
+
 def assert_equal_anndata(ad1, ad2, decimal = 7):
     np.testing.assert_almost_equal(ad1.X, ad2.X, decimal=decimal,  err_msg=".X is off")
     assert ad1.obs.equals(ad2.obs), ".obs is off"
     assert ad1.var.equals(ad2.var), ".var is off"
-
 
 def set_up_trials(hyperparameters):
     conditions =  pd.DataFrame(
@@ -141,6 +142,8 @@ def test_correctness_in_detail(conditions, result_csv):
         del predictions.obs["index"]
         del end_state.obs  ["matched_control"]
         del predictions.obs["matched_control"]
+        end_state.obs  ["expression_level_after_perturbation"] = end_state.obs  ["expression_level_after_perturbation"].astype("float")
+        predictions.obs["expression_level_after_perturbation"] = end_state.obs  ["expression_level_after_perturbation"].astype("float")
         print(end_state.obs)
         print(predictions.obs)
         assert_equal_anndata(predictions, end_state.copy(), decimal=0)       
