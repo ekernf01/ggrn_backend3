@@ -24,41 +24,35 @@ class LinearAutoregressive(pl.LightningModule):
         n_genes,
         S,
         regression_method,
-        low_dimensional_structure: str,
-        low_dimensional_training: str,
+        low_dimensional_structure,
+        low_dimensional_training,
         low_dimensional_value,
-        loss_function: str,
-        learning_rate: float, 
-        regularization_parameter: float,
-        optimizer: str,
-        initialization_method: str,
-        initialization_value: np.matrix,
-        do_line_search: bool,
-        lbfgs_memory: int,
+        loss_function,
+        learning_rate, 
+        regularization_parameter,
+        optimizer,
+        initialization_method,
+        initialization_value,
+        do_line_search,
+        lbfgs_memory,
     ):
         """Linear autoregressive model
 
         Args:
             n_genes (_type_): Data dimension
-            S (int): Number of time-steps separating each sample from its matched control.
-            regression_method (str): Currently only allows "linear".
-            low_dimensional_structure (str) "none" or "dynamics" or "RGQ". 
-                - If "none", dynamics will be modeled using the original data.
-                - If "dynamics", dynamics will be modeled in a linear subspace. See also low_dimensional_training.
-                - "RGQ" is a deprecated option identical to "dynamics".
-            low_dimensional_training (str): "SVD" or "fixed" or "supervised". How to learn the linear subspace. 
-                If "SVD", perform an SVD on the data.
-                If "fixed", use a user-provided projection matrix.
-                If "supervised", learn the projection and its (approximate) inverse via backprop.
-            low_dimensional_value (int or numpy matrix): Dimension of the linear subspace, or an entire projection matrix.
-            loss_function: Measures deviation between observed and predicted, e.g. torch.nn.HuberLoss().
-            learning_rate (float): Learning rate for ADAM optimizer
-            regularization_parameter (float): LASSO penalty on coefficients
-            optimizer (str): 'ADAM' or 'L-BFGS' or 'ADAMW' or 'AMSGRAD'
-            initialization_method (str): one of "kaiming", "he", "identity", "user". How to initialize the coefficients in the transition matrix G.
-            initialization_value (np.matrix): Initial value of G, used if initialization_method=="user".  
-            do_line_search (bool): Whether to do the line search in L-BFGS. We strongly recommend "True".
-            lbfgs_memory (int): Memory parameter for L-BFGS.
+            S (_type_): _description_
+            regression_method (_type_): _description_
+            low_dimensional_structure (_type_): _description_
+            low_dimensional_training (_type_): _description_
+            low_dimensional_value (_type_): _description_
+            loss_function (int): Measures deviation between observed and predicted. Try torch.nn.HuberLoss().
+            learning_rate (_type_): _description_
+            regularization_parameter (_type_): _description_
+            optimizer (_type_): _description_
+            initialization_method (_type_): _description_
+            initialization_value (_type_): _description_
+            do_line_search (_type_): _description_
+            lbfgs_memory (_type_): _description_
 
         """
         super().__init__()
@@ -81,7 +75,7 @@ class LinearAutoregressive(pl.LightningModule):
             if low_dimensional_value is not None:
                 print("low_dimensional_value will be ignored since low_dimensional_structure is 'none'.")
                 low_dimensional_value = None
-        elif low_dimensional_structure.lower() in ["rgq", "dynamics"]:
+        elif low_dimensional_structure.lower() == "rgq":
             if low_dimensional_value is None:
                 raise ValueError("low_dimensional_value must be the latent dimension, or a matrix of shape (latent_dim by n_genes).")
             try:
@@ -97,7 +91,7 @@ class LinearAutoregressive(pl.LightningModule):
             self.Q = torch.nn.Linear(n_genes, latent_dimension, bias=False, dtype = torch.float32)
             self.R = torch.nn.Linear(latent_dimension, n_genes, bias=False, dtype = torch.float32)
         else:
-            raise ValueError(f"low_dimensional_structure must be 'none' or 'dynamics'; received {low_dimensional_structure}")
+            raise ValueError(f"low_dimensional_structure must be 'none' or 'RGQ'; received {low_dimensional_structure}")
 
         # Set up G, which projects forward one time-step in the latent space
         if regression_method.lower() == "linear":
@@ -113,7 +107,7 @@ class LinearAutoregressive(pl.LightningModule):
         self.initialize_g(initialization_method = initialization_method, initialization_value = initialization_value)
 
         # Decide how to train & initialize the projection operator Q and its right inverse approximator R
-        if low_dimensional_structure.lower() in ["rgq", "dynamics"]: 
+        if low_dimensional_structure.lower() == "rgq": 
             if low_dimensional_training is None:
                 pass 
             elif low_dimensional_training.lower() == "supervised":
@@ -242,4 +236,4 @@ class LinearAutoregressive(pl.LightningModule):
                 else:
                     init.constant_(param, torch.tensor(initialization_value))            
             else:
-                raise ValueError(f"'initialization_method' may be 'kaiming' or 'he' or 'identity' or 'user'; received {initialization_method}")
+                raise ValueError(f"'initialization_method' may be 'kaiming' or 'identity' or 'user'; received {initialization_method}")

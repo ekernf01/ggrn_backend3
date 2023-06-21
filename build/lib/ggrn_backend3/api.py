@@ -11,13 +11,6 @@ from datetime import datetime
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.neighbors import KDTree
-from torch.cuda import is_available as is_gpu_available
-
-# We assume this is run from Eric's whole-project-all-repos directory or from the location of this script.
-try:
-    os.chdir("ggrn_backend3/tests")
-except FileNotFoundError:
-    pass
 
 class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
     """Data loader that chops up an AnnData and feeds it to PyTorch"""
@@ -93,13 +86,6 @@ class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
             raise KeyError(f"Cannot find gene named {g}, and so it cannot be perturbed. Use 'control' for unperturbed observations or set assume_unrecognized_genes_are_controls=True.")
 
 def MatchControls(train_data: anndata.AnnData, matching_method: str):
-    """
-    Add info to the training data about which observations are paired with which.
-
-    matching_method: "closest" (choose the closest control), or
-      "user" (do nothing and expect an existing column 'matched_control'), or 
-      "random" (choose a random control).
-    """
     if matching_method.lower() == "closest":
         assert "matched_control" not in train_data.obs.columns, "matched_control column is already in .obs; delete it or set matching_method='user'."
         assert "is_control" in train_data.obs.columns, "A boolean field 'is_control' is required."
@@ -115,12 +101,10 @@ def MatchControls(train_data: anndata.AnnData, matching_method: str):
             if train_data.obs.loc[i, "is_control"]:
                 train_data.obs.loc[i, "is_steady_state"] = True
                 train_data.obs.loc[i, "matched_control"] = i # Controls should be self-matched, which can fail when input data have exact dupes.
-    elif matching_method.lower() == "steady_state":
-        assert "matched_control" not in train_data.obs.columns, "matched_control column is already in .obs; delete it or set matching_method='user'."
-        raise NotImplementedError("Sorry, the autoregressive backend cannot exclude autoregulation and will return trivial solutions for steady state data. Try DCDFG instead.")
     elif matching_method.lower() == "optimal_transport":
         assert "matched_control" not in train_data.obs.columns, "matched_control column is already in .obs; delete it or set matching_method='user'."
         raise NotImplementedError("Sorry, cannot yet match samples to controls by optimal transport.")
+        train_data.obs["matched_control"] = "placeholder"
     elif matching_method.lower() == "random":
         assert "matched_control" not in train_data.obs.columns, "matched_control column is already in .obs; delete it or set matching_method='user'."
         train_data.obs["matched_control"] = np.random.choice(
@@ -132,7 +116,7 @@ def MatchControls(train_data: anndata.AnnData, matching_method: str):
         assert "matched_control" in train_data.obs.columns, "You must provide obs['matched_control']."
         assert all( train_data.obs.loc[train_data.obs["matched_control"].notnull(), "matched_control"] < train_data.n_obs ), f"Matched control index may not be above {train_data.n_obs}."
     else: 
-        raise ValueError("matching method must be 'closest', 'user', or 'random'.")
+        raise ValueError("matching method must be 'closest' or 'random'.")
     # This helps exclude observations with no matched control.
     train_data.obs["index_among_eligible_observations"] = train_data.obs["matched_control"].notnull().cumsum()-1
     train_data.obs.loc[train_data.obs["matched_control"].isnull(), "index_among_eligible_observations"] = np.nan
@@ -143,8 +127,8 @@ class GGRNAutoregressiveModel:
 
     def __init__(
         self, 
-        train_data: anndata.AnnData, 
-        matching_method: str,
+        train_data, 
+        matching_method,
         S: int = 1,
         regression_method: str = "linear",
         low_dimensional_structure: str = "none",
@@ -154,25 +138,6 @@ class GGRNAutoregressiveModel:
         network = None,
         assume_unrecognized_genes_are_controls = False,
     ):
-        """
-        train_data: AnnData object,
-        matching_method: str, see MatchControls.
-        regression_method: Functional form of G. Currently only accepts "linear".
-        S (int): Number of time-steps separating each sample from its matched control.
-        regression_method (str): Currently only allows "linear".
-        low_dimensional_structure (str) "none" or "dynamics" or "RGQ". 
-            - If "none", dynamics will be modeled using the original data.
-            - If "dynamics", dynamics will be modeled in a linear subspace. See also low_dimensional_training.
-            - "RGQ" is a deprecated option identical to "dynamics".
-        low_dimensional_training (str): "SVD" or "fixed" or "supervised". How to learn the linear subspace. 
-            If "SVD", perform an SVD on the data.
-            If "fixed", use a user-provided projection matrix.
-            If "supervised", learn the projection and its (approximate) inverse via backprop.
-        low_dimensional_value (int or numpy matrix): Dimension of the linear subspace, or an entire projection matrix.
-        loss_function: Measures deviation between observed and predicted, e.g. torch.nn.HuberLoss().
-        assume_unrecognized_genes_are_controls: If True, treat unrecognized gene names as controls when reading perturbation info. 
-            We recommend False, but True can be useful for e.g. controls labeled "GFP" or "ctrl" or "scramble".  
-        """
         self.train_data = AnnDataMatchedControlsDataSet(train_data, matching_method, assume_unrecognized_genes_are_controls=assume_unrecognized_genes_are_controls)
         self.model = None
         self.network = network
@@ -256,7 +221,7 @@ class GGRNAutoregressiveModel:
         if optimizer.lower() == "l-bfgs" and gradient_clip_val is not None:
             raise ValueError("Gradient clipping is not allowed with a second-order method like L-BFGS.")
         if device is None:
-            device = "cuda" if is_gpu_available() else "cpu",
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = linear_autoregressive.LinearAutoregressive(
             n_genes = self.train_data.adata.X.shape[1],
             S = self.S,
@@ -292,6 +257,7 @@ class GGRNAutoregressiveModel:
             ),
             max_epochs=int(max_epochs),
             accelerator=device,   
+            track_grad_norm = 2, 
             gradient_clip_val = gradient_clip_val,
             deterministic = True,
             callbacks= (
@@ -325,7 +291,7 @@ class GGRNAutoregressiveModel:
             perturbations (list): List of tuples like [("NANOG", 0), ("OCT4", 0), ("NANOG,OCT4", "0,0"), ("control", 0)]. Each tuple corresponds
                 to one expression profile in the output, and comma-separated lists are used to apply multiple perturbations to the
                 same predicted expression profile. To run a simulation with no perturbed genes, use "control" as the gene name.
-                Tuples like ("control,NANOG", "0,0") or ("notagene", 0) are not allowed.
+                Tuples like ("control,2", "0,0") or ("notagene", 0) are not allowed.
             starting_expression (anndata.AnnData): Starting state for simulation. One expression profile per perturbation.
 
         Returns:
@@ -404,73 +370,42 @@ class GGRNAutoregressiveModel:
 def simulate_autoregressive(
     num_controls_per_group = 2, 
     num_control_groups = 2 ,
-    include_treatment = True,
-    F = None,
     num_features = 5, 
     seed = 0, 
     num_steps = 1, 
     initial_state = "random",
     F_type = "random",
+    include_treatment = True,
     latent_dimension = None,
-    expression_level_after_perturbation = 1,
 ):
     """Simulate data from an autoregressive model of the sort ggrn_backend3 assumes. 
 
     Args:
         num_controls_per_group (int, optional): How many control samples in each group. Defaults to 2.
         num_control_groups (int, optional): How many groups of control samples. Defaults to 2.
-        include_treatment (bool, optional): If true, copy each control sample num_features times and perturb one feature in each of the new groups.
-            Defaults to True.
-        F (np.array, optional): The transition matrix. If you specify this, the remaining options are disregarded.
         num_features (int, optional): Data dimension. Defaults to 5.
         seed (int, optional): Used to make repeatable random data. Defaults to 0.
         num_steps (int, optional): Also called S in the mathematical specs. How many time-steps forward to "run" it. Defaults to 1.
-        initial_state (str, optional): Can be "random" or "identity" or a numpy array. Defaults to "random".
+        initial_state (str, optional): Can be "random" or "identity". For some purposes it's useful to start with an identity matrix. Defaults to "random".
         F_type (str, optional): F is the transition matrix -- see the mathematical specs for more details. Can be "random" or "low-rank" or "zero". 
             Defaults to "random".
+        include_treatment (bool, optional): If true, copy each control sample num_features times and perturb one feature in each of the new groups.
+            Defaults to True.
         latent_dimension (int, optional): rank of F if F_type is "low_rank"; otherwise not used. Defaults to half of num_features, rounded up.
 
     Returns:
         tuple: linear_autoregressive, R,G,Q,F, latent_dimension where linear_autoregressive is an 
             AnnData, R,G,Q,F are transition matrices or factors thereof (F=RGQ), and latent_dimension is the rank of F.
     """
-    # Set up transition matrix unless user-provided
-    if F is not None:
-        latent_dimension = num_features = F.shape[0]
-        Q = np.eye(num_features)
-        R = np.eye(num_features)
-        G = F
-        # F is defined
-    else:
-        if latent_dimension is None:
-            latent_dimension = int(round(num_features/2))
-        if F_type == "random":
-            Q = np.eye(num_features)
-            R = np.eye(num_features)
-            F = G = np.random.random((num_features,num_features)) 
-        elif F_type == "low_rank":
-            R = np.random.random((num_features, latent_dimension))
-            Q = R.T
-            G = np.eye(latent_dimension)
-            F = R.dot(G.dot(Q))
-        elif F_type == "zero":
-            Q = np.eye(num_features)
-            R = np.eye(num_features)
-            F = G = np.zeros((num_features, num_features))
-        else:
-            raise ValueError(f"F_type must be 'random' or 'low_rank' or 'zero'; received {F_type}.")
-
-    # Set up observation metadata
-    # This is a pretty normal simulation combining controls and perturbed samples, with linear propagation of 
-    # perturbation effects.
+    if initial_state == "identity":
+        num_controls_per_group = num_features
+    # This is a pretty normal simulation combining controls and perturbed samples, with linear propagation of perturbation effects.
     # The weirdest naming decision here is we mark some samples as "treatment", even though no gene is perturbed.
     # Even tho there is no treatment, the below code will only advance them forward in time if they are labeled as treated. 
-    # We'll fix this right before returning the object -- they will be marked as controls.
+    # We'll fix this right before returning the object.
     #
-    # Also: we train on input-output pairs. The first element of each pair is never used as output. 
-    # So, its "matched_control" must be nan.
-    if type(initial_state) == str and initial_state == "identity":
-        num_controls_per_group = num_features
+    # Also: we train on input-output pairs. The first element of each pair is never used as output. So, its "matched_control" must be nan.
+
     num_treatment_types = num_features if include_treatment else 0
     num_controls = num_controls_per_group*num_control_groups
     metadata = pd.DataFrame({
@@ -483,23 +418,36 @@ def simulate_autoregressive(
         "is_treatment":                         np.repeat([False, True ], [num_controls, (num_treatment_types+1)*num_controls]),
         "is_steady_state":                      [False]*(num_treatment_types+2)*num_controls,
         "perturbation":                         np.repeat(["-999", "-999"] + include_treatment*[str(i) for i in range(num_treatment_types) ], num_controls),
-        "expression_level_after_perturbation":  np.repeat(expression_level_after_perturbation, (num_treatment_types + 2)*num_controls),
+        "expression_level_after_perturbation":  np.repeat(10, (num_treatment_types + 2)*num_controls),
     })
     metadata["matched_control"] = metadata["matched_control"].round().astype('Int64')
     np.random.seed(seed)
-    
-    # Define starting states
-    if type(initial_state) == np.ndarray:
-        assert initial_state.shape == (num_controls, num_features), f"initial_state must have shape {(num_controls, num_features)}; got shape {initial_state.shape}"
-        all_controls = initial_state
-    elif initial_state == "random":
+    if initial_state == "random":
         all_controls = np.random.random((num_controls, num_features))
     elif initial_state == "identity":
         all_controls = np.kron([1, 2], np.eye(num_controls_per_group)).T
     else:
-        raise ValueError(f"initial_state must be 'random' or 'identity' or an np.array; received type {type(initial_state)}, value {initial_state}.")
+        raise ValueError(f"initial_state must be 'random' or 'identity'; received {initial_state}.")
 
-    # Define simulation logic
+    if latent_dimension is None:
+        latent_dimension = int(round(num_features/2))
+    if F_type == "random":
+        Q = np.eye(num_features)
+        R = np.eye(num_features)
+        F = G = np.random.random((num_features,num_features)) 
+    elif F_type == "low_rank":
+        R = np.random.random((num_features, latent_dimension))
+        Q = R.T
+        G = np.eye(latent_dimension)
+        F = R.dot(G.dot(Q))
+    elif F_type == "zero":
+        Q = np.eye(num_features)
+        R = np.eye(num_features)
+        F = G = np.zeros((num_features, num_features))
+    else:
+        raise ValueError(f"F_type must be 'random' or 'low_rank' or 'zero'; received {initial_state}.")
+        
+
     def perturb(one_control, perturbation, expression_level_after_perturbation):
         x = one_control.copy()
         if int(perturbation) >= 0:

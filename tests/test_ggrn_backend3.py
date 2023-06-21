@@ -10,11 +10,6 @@ import load_perturbations
 import load_networks
 import ggrn.api as ggrn
 
-# Helpful for interactive use given Eric's project folder setup
-try:
-    os.chdir("ggrn_backend3")
-except:
-    pass
 
 # Access our data collections
 load_networks.set_grn_location(
