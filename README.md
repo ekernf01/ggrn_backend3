@@ -40,14 +40,15 @@ y = model.predict(perturbations = [("1,2", "0,0")], starting_expression = linear
 
 Formally, this package minimizes
 
-$$ L(X) = \sum_{i\in treated} ||(R \circ G \circ Q \circ P_i)^S(X_{M(i)}) - X_i|| + \\
-\sum_{i\in steady} ||(R \circ G \circ Q\circ P_i)(X_{i}) - X_i|| + \\ 
+$$ L(X) = \sum_{i\in treated} ||(I + R \circ G \circ Q \circ P_i)^S(X_{M(i)}) - X_i|| + \\
+\sum_{i\in steady} ||(I + R \circ G \circ Q\circ P_i)(X_{i}) - X_i|| + \\ 
 J(G, Q, R) $$
 
 where:
 
 - $treated$ is a set of indices for samples that have undergone treatment.
 - $steady$ is a set of samples that is assumed to have reached a steady state (usually, all controls).
+- $I$ is the identity transformation
 - $Q$ is an encoder (original to low dimension) and $R$ is a decoder (low to original dimension). Currently $Q$ and $R$ can be learned by PCA (similer to PRESCIENT), OR learned by backprop (similar to DCD-FG), OR specified by the user as e.g. motif counts + pseudoinverse (similar to ARMADA), OR set to the identity matrix. 
 - $G$ predicts a single step forward in time by $T/S$ hours, where $T$ is the duration of treatment.
 - $P_i$ enforces interventions on genes perturbed in sample $i$ by setting them to a user-specified value.
@@ -55,4 +56,4 @@ where:
 - $M(i)$ is the index of a control sample matched to treated sample $i$. $M(i)$ can be implemented by choosing a random control, OR by choosing the closest control, or can be user-provided. 
 - $J$ is a regularizer. We use an L1 penalty on entries of matrices representing $G$ if $G$ is linear.
 
-This framework can in theory be trained on time-series data, interventional data, or a mixture. For time-series data, $S$ should be adjusted per-sample so it is proportional to the time elapsed. So far, time-series handling is not implemented; we focus on perturbation experiments where all outcomes are measured at the same time-point. 
+This framework can in theory be trained on a mixture of time-series and steady-state data and a mixture of interventional and observational data. For time-series data, $S$ should be adjusted per-sample so it is proportional to the time elapsed. So far, time-series handling is not implemented; we focus on perturbation experiments where all outcomes are measured at the same time-point. For observational steady-state data, there is no way to prevent learning the trivial solution $G=R=Q=0$; consider instead using DCD-FG for this type of data.
