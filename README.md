@@ -40,8 +40,8 @@ y = model.predict(perturbations = [("1,2", "0,0")], starting_expression = linear
 
 Formally, this package minimizes
 
-$$ L(X) = \sum_{i\in treated} ||(I + R \circ G \circ Q \circ P_i)^S(X_{M(i)}) - X_i|| + \\
-\sum_{i\in steady} ||(I + R \circ G \circ Q\circ P_i)(X_{i}) - X_i|| + \\ 
+$$ L(X) = \sum_{i\in treated} ||(P_i \circ (I + R \circ G \circ Q \circ P_i))^S(X_{M(i)}) - X_i|| + \\
+\sum_{i\in steady} ||(P_i \circ (I + R \circ G \circ Q\circ P_i))(X_{i}) - X_i|| + \\ 
 J(G, Q, R) $$
 
 where:
