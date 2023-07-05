@@ -48,7 +48,7 @@ where:
 
 - $treated$ is a set of indices for samples that have undergone treatment.
 - $steady$ is a set of samples that is assumed to have reached a steady state (usually, all controls).
-- $Q$ is an encoder (original to low dimension) and $R$ is a decoder (low to original dimension). Currently $Q$ and $R$ can be learned by PCA (similer to PRESCIENT), OR learned by backprop (similar to DCD-FG), OR specified by the user as e.g. motif counts + pseudoinverse (similar to ARMADA), OR set to the identity matrix. Maybe eventually we could have some rows fixed by the user and others optimized, as in [PEER](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1000770).
+- $Q$ is an encoder (original to low dimension) and $R$ is a decoder (low to original dimension). Currently $Q$ and $R$ can be learned by PCA (similer to PRESCIENT), OR learned by backprop (similar to DCD-FG), OR specified by the user as e.g. motif counts + pseudoinverse (similar to ARMADA), OR set to the identity matrix. 
 - $G$ predicts a single step forward in time by $T/S$ hours, where $T$ is the duration of treatment.
 - $P_i$ enforces interventions on genes perturbed in sample $i$ by setting them to a user-specified value.
 - $F^S(X) = F(F(...F(X))...)$ ($S$ iterations of $F(X)$).
