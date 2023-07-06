@@ -113,7 +113,7 @@ class LinearAutoregressive(pl.LightningModule):
         self.initialize_g(initialization_method = initialization_method, initialization_value = initialization_value)
 
         # Decide how to train & initialize the projection operator Q and its right inverse approximator R
-        if low_dimensional_structure.lower() in ["rgq", "dynamics"]: 
+        if str(low_dimensional_structure).lower() in ["rgq", "dynamics"]: 
             if low_dimensional_training is None:
                 pass 
             elif low_dimensional_training.lower() == "supervised":

@@ -256,7 +256,7 @@ class GGRNAutoregressiveModel:
         if optimizer.lower() == "l-bfgs" and gradient_clip_val is not None:
             raise ValueError("Gradient clipping is not allowed with a second-order method like L-BFGS.")
         if device is None:
-            device = "cuda" if is_gpu_available() else "cpu",
+            device = "cuda" if is_gpu_available() else "cpu"
         self.model = linear_autoregressive.LinearAutoregressive(
             n_genes = self.train_data.adata.X.shape[1],
             S = self.S,
