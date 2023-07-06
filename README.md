@@ -1,10 +1,11 @@
 ## Autoregressive models for gene regulatory network inference
 
-This Python package implements flexible vector autoregressive models for gene regulatory network modeling as part of the Grammar of Gene Regulatory Network inference methods ([GGRN](https://github.com/ekernf01/ggrn/blob/main/README.md)). In brief, we fit models assuming a expression profile $X_t$ measured $S$ time-steps after perturbing gene $P$ can be matched to a control $X_c$ such that $X_t = F^S(X_c, P)$. We currently assume linear $F$. More details are given below.
+This Python package implements flexible vector autoregressive models for gene regulatory network modeling as part of the Grammar of Gene Regulatory Network inference methods ([GGRN](http://github.com/ekernf01/ggrn)). In brief, we fit models assuming a expression profile $X_t$ measured $S$ time-steps after perturbing gene $P$ can be matched to a control $X_c$ such that $X_t = F^S(X_c, P)$. We currently assume linear $F$. More details are given below.
 
 ### Installation
 
-TBD
+- For stand-alone use of this package, there is a `requirements.txt` so you can use pip to install it and the deps should be taken care of.
+- This is part of a benchmarking study that includes a conda environment with exact deps pinned. See our [benchmarking repo](https://github.com/ekernf01/perturbation_benchmarking) for more information. 
 
 ### Usage
 
