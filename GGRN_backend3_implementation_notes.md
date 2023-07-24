@@ -1,13 +1,12 @@
-These notes describe implementation progress on the autoregressive backend. For a formal mathematical specification of the objective functions we want to minimize, visit the ggrn repo. 
+These notes describe progress and testing of our autoregressive models.
 
-#### Pitfalls
 
-1. A linear function $F$ is not uniquely determined by equations of the form $y=F^2(x)$, because it can be replaced by $-F$. Because of this, it will be important to always have at least a few training examples where $y=F(x)$ (usually at least the controls, and sometimes all samples if steady state is assumed). This becomes less of an issue if we have irregularly spaced time-points, or if we shrink $F$ towards the identity function (absent evidence, prefer steadiness over oscillation).
-2. It is probably hard to train this type of model when $S>2$. A possible work-around/relaxation would be to add some intermediates: instead of minimizing $||Y - F^4(X)||^2$, minimize $||Y - H^2(X)||^2 + \lambda||F^2(X) - H(X)||^2$. For linear models, $H=F^2$ is possible exactly; for neural nets, $H$ would act as an approximation for $F^2$, but probably shallower. 
-3. A different work-around (linear only) would be to represent $F$ via its eigendecomposition. 
-4. Yet another relaxation would be to minimize $||Y - F_1(F_2(X))||^2 + \lambda||F_1(X) - F_2(X)||^2$.
-5. Another possible pitfall is if $z\neq Q((z))$. Adding $||Q(R(z)) - z||^2$ to $J$ could help, or $R$ could be absorbed into $G$ as in DCD-FG.
-6. If you use L-BFGS rather than ADAM, PyTorch allows you to set the learning rate and do gradient clipping. This makes no sense with L-BFGS. Use LR=1 with no gradient clipping.
+#### Optimization pitfalls
+
+- Optimization is hard when $S>2$. A possible work-around/relaxation would be to add some intermediates: instead of minimizing $||Y - F^4(X)||^2$, minimize $||Y - H^2(X)||^2 + \lambda||F^2(X) - H(X)||^2$. For linear models, $H=F^2$ is possible exactly; for neural nets, $H$ would act as an approximation for $F^2$, but probably shallower. 
+    - A different work-around (linear only) would be to represent $F$ via its eigendecomposition. 
+    - Yet another relaxation would be to minimize $||Y - F_1(F_2(X))||^2 + \lambda||F_1(X) - F_2(X)||^2$.
+- If you use L-BFGS rather than ADAM, PyTorch allows you to set the learning rate and do gradient clipping. This makes no sense with L-BFGS. Use LR=1 with no gradient clipping.
 
 #### Correctness testing
 
@@ -17,9 +16,11 @@ The low-rank structure options can be tricky to test. We describe different trai
 
 - Fixed: This seems simple as long as we use the same $Q$ and $R$ to during training that we used to generate the data.
 - Supervised: The complication here is that $R_1G_1Q_1=R_2G_2Q_2$ does not imply $R_1=R_2$, etc. We can test that $F$ is correctly recovered, but we can't expect to get individual factors right.
-- PCA: As above, $R_1G_1Q_1=R_2G_2Q_2$ does not imply $R_1=R_2$, etc. We can test that $F$ is correctly recovered, but we can't expect to get individual factors right except by coincidence. The complication here is that even though people use PCA for GRN inference, the mathematical models corresponding to PCA don't normally discuss interventions or time-series. For us, a time-series $X_0, P(F(P(X_0))), (PF)^2(P(X_0))...$ will in general be confined to the column space of $F$, except for $X_0$ and except for any sample that is intervened on ($P(X)\neq X$). Normally our testing code will output $X_0$ and $X_1$. To get $F$ exactly right, we can set $X_0$ to something in $col(F)$, or to a multiple of the identity matrix (because that will preserve the left singular vectors). 
+- PCA: As above, $R_1G_1Q_1=R_2G_2Q_2$ does not imply $R_1=R_2$, etc. We can test that $F$ is correctly recovered, but we can't expect to get individual factors right except by coincidence. The complication here is that even though people use PCA for GRN inference, the mathematical models corresponding to PCA don't normally discuss interventions or time-series. For us, a time-series $X_0, P(F(P(X_0))), (PF)^2(P(X_0))...$ will in general be confined to the column space of $F$, except for $X_0$ and except for any sample that is intervened on ($P(X)\neq X$). Normally our testing code will output $X_0$ and $X_1$. To get $F$ exactly right when using PCA, we may need to:
+    - avoid interventions
+    - set $X_0$ to something in $col(F)$, or to a multiple of the identity matrix (because that will preserve the left singular vectors). 
 
-#### Optimization notes: vanilla linear autoregressive
+#### Testing progress: vanilla linear autoregressive
 
 As of 2022 Dec 27, the code is in an interesting state where it converges to the right answer on low-D toy examples some of the time, and other times it displays a couple different problems. Sometimes it refuses to converge and other times it is making progress but rapidly blows up to very large weights or biases. Here is what we have begun to experiment with.
 
@@ -62,7 +63,7 @@ Formal experiments:
 - Exp 22: This is exp 21, but with ADAM in place of L-BFGS. It works up to S=8. At S=16, it stops at epoch 31, likely because the early stopping patience param is 30. 
 - Exp 23: This is exp 22 but with S=4 fixed and with various dimensions. It worked pretty well up to dimension=50. At dimension=100, it seems promising but it hit the max num epochs (10k) after ~1.5 hours. At dimension 200 and 500, ADAM stopped at bad estimates after thousands of epochs. I was able to interact with the results from the final run (500D). The entries of G^S are large (typical absolute value 8E6), and the relative error in estimating G^S is under 1%. Relative error in estimating $G$ is close to 50%. I suspect Pitfall #1 again, since a matrix with 500 distinct eigenvalues has many 4th roots (500^4 of them). I also notice that the true G has 203 eigenvalues with negative real part, and the estimated G has none. I consider this a success, and I will begin logging errors in $G^S$ alongside errors in $G$, for cases where $G$ is not identifiable.
 
-#### Optimization notes: low-rank linear autoregressive
+#### Testing progress: low-rank linear autoregressive
 
 In early January 2023, I committed changes and began working on additional features. 
 
