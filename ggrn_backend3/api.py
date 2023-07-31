@@ -12,12 +12,6 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.cuda import is_available as is_gpu_available
 
-# We assume this is run from Eric's whole-project-all-repos directory or from the location of this script.
-try:
-    os.chdir("ggrn_backend3/tests")
-except FileNotFoundError:
-    pass
-
 class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
     """Data loader that chops up an AnnData and feeds it to PyTorch"""
     def __init__(self, adata: anndata.AnnData, matching_method: str, assume_unrecognized_genes_are_controls: bool) -> None:
