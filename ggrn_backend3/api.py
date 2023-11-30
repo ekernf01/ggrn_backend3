@@ -467,7 +467,8 @@ def simulate_autoregressive(
     linear_autoregressive.obs["perturbation"] = [str(s) for s in linear_autoregressive.obs["perturbation"]]
     linear_autoregressive.obs.loc[linear_autoregressive.obs["perturbation"]=="control","is_control"] = True
     if not matched_control_is_integer:
-        has_matched_control = metadata["matched_control"].notnull()
-        mc = [int(i) for i in metadata.loc[has_matched_control, "matched_control"]]
-        metadata.loc[has_matched_control, "matched_control"] = metadata.iloc[mc]["index"]
+        has_matched_control = linear_autoregressive.obs["matched_control"].notnull()
+        mc = [int(i) for i in linear_autoregressive.obs.loc[has_matched_control, "matched_control"]]
+        linear_autoregressive.obs["matched_control"] = [str(s) for s in linear_autoregressive.obs["matched_control"]]
+        linear_autoregressive.obs.loc[has_matched_control, "matched_control"] = [str(s) for s in linear_autoregressive.obs.iloc[mc]["index"]]
     return linear_autoregressive, R,G,Q,F, latent_dimension
