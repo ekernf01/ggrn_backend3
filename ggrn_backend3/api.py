@@ -37,26 +37,22 @@ class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
 
         assert self.adata.X.dtype == np.float32, f"Use single precision input for this model; got type {self.adata.X.dtype}."
 
-        # Mark each observation as treatment, control, and/or steady state
+        # Mark each observation as trt vs control
         if "is_control" not in set(self.adata.obs.columns):
-            raise KeyError("train data must have a boolean column in .obs with key 'is_control'.")
+            raise KeyError("train data must have a boolean column in .obs with name 'is_control'.")
         if self.adata.obs["is_control"].dtype.name != "bool":
             dt = self.adata.obs["is_control"].dtype
             raise TypeError(f"train.obs['is_control'] must be boolean. dtype: {repr(dt)}")
-        if "is_treatment" not in set(self.adata.obs.columns):
-            self.adata.obs["is_treatment"] = ~self.adata.obs["is_control"]
-        # Default: controls are at steady state, treated samples are not
+        # If a sample is paired with itself, we are not going to bother making sure it's the same after S time-steps; just 1.
         if "is_steady_state" not in set(self.adata.obs.columns):
-            self.adata.obs["is_steady_state"] = self.adata.obs["is_control"]
-        else:
-            assert self.adata.obs["is_steady_state"].dtype.name == "bool", "obs['is_steady_state'] must have dtype bool"
+            self.adata.obs["is_steady_state"] = self.adata.obs["matched_control"] == range(self.adata.n_obs)
         if "perturbation" not in self.adata.obs.columns:
             raise KeyError("train data must have a comma-separated str column in .obs with key 'perturbation'.")
         if "expression_level_after_perturbation" not in self.adata.obs.columns:
             raise KeyError("train data must have a comma-separated str column in .obs with key 'expression_level_after_perturbation'.")
         if self.adata.obs["expression_level_after_perturbation"].dtype.name != "str":
             self.adata.obs['expression_level_after_perturbation'] = self.adata.obs['expression_level_after_perturbation'].astype(str)
-        self.adata = ggrn.match_controls(self.adata, matching_method)
+        self.adata = ggrn.match_controls(self.adata, matching_method, matched_control_is_integer=True)
         assert self.adata.X.dtype == np.float32, f"Use single-precision input with this model; got dtype {self.adata.X.dtype}"
 
     def __len__(self):
@@ -308,13 +304,11 @@ class GGRNAutoregressiveModel:
                 predictions.obs.index[i], # I am afraid to do iloc with col names
                 [
                     "is_control",
-                    "is_treatment",
                     "perturbation",
                     "expression_level_after_perturbation",
                 ]
             ] = (
                 p[0].lower()=="control",
-                p[0].lower()!="control",
                 p[0],
                 np.float(p[1]),
             )
@@ -349,36 +343,43 @@ class GGRNAutoregressiveModel:
 
 
 def simulate_autoregressive(
-    num_controls = 2 ,
     include_treatment = True,
     F = None,
     num_features = 5, 
     seed = 0, 
     num_steps = 1, 
-    initial_state = "random",
-    F_type = "random",
+    initial_state: str = "random",
+    F_type: str = "random",
     latent_dimension = None,
-    expression_level_after_perturbation = 1,
+    expression_level_after_perturbation: float = 1,
+    residual_connections: bool = True,
+    matched_control_is_integer: bool = True,
 ):
-    """Simulate data from an autoregressive model of the sort ggrn_backend3 assumes: X1 = P(X0 + F(P(X0))) where P enforces perturbation and F controls dynamics. 
+    """Simulate data from a linear autoregressive model of the sort ggrn_backend3 assumes: X[t+1] = P(X[t] + F(P(X[t]))) where P enforces perturbations and F controls dynamics. 
+
+    This function always yields output with 2G samples where G is the number of features. Of these 2G samples, half are at time 0 and half are after num_steps.
+    The metadata includes a column "matched_control". For samples at time 0, this is nan. For the rest, it specifies the integer index of the sample used as the initial timepoint.
+    This is used by our inference code when learning F. It can be altered later if you have reason to do so, e.g. if you want to assume steady state.
 
     Args:
-        num_controls (int, default=2): How many control samples. Note you'll receive TWO observations for each control: before and after. These may not be identical.
-        include_treatment (bool, optional): If true, copy each control sample num_features times and perturb one feature in each of the new groups.
-            Defaults to True.
-        F (np.array, optional): The transition matrix. If you specify this, the remaining options are disregarded.
-        num_features (int, optional): Data dimension. Defaults to 5.
-        seed (int, optional): Used to make repeatable random data. Defaults to 0.
-        num_steps (int, optional): Also called S in the mathematical specs. How many time-steps forward to "run" it. Defaults to 1.
+        include_treatment (bool, optional): If true (default), each feature is perturbed in one of the final-timepoint samples. 
         initial_state (str, optional): Can be "random" or "identity" or a numpy array. Defaults to "random".
+        seed (int, optional): Used to make repeatable random data. Defaults to 0. 
+        num_steps (int, optional): Also called S in the mathematical specs. How many time-steps forward to "run" it. Defaults to 1.
+        residual_connections: If True (default), compute X = F(X) + X at each iteration. If False, compute X = F(X) at each iteration.
+        matched_control_is_integer: If True (default), the "matched_control" column in the obs of the returned anndata contains integers.
+            Otherwise, it contains elements of adata.obs_names. 
+        F (np.array, optional): The transition matrix. If you specify this, num_features, latent_dimension, and F_type are disregarded.
+        num_features (int, optional): Data dimension. Defaults to shape of F or 5.
         F_type (str, optional): F is the transition matrix -- see the mathematical specs for more details. Can be "random" or "low-rank" or "zero". 
-            Defaults to "random".
-        latent_dimension (int, optional): rank of F if F_type is "low_rank"; otherwise not used. Defaults to half of num_features, rounded up.
+            Defaults to "random". Ignored if F is given.
+        latent_dimension (int, optional): rank of F. Ignored if F is given. Ignored unless F_type is "low_rank". Defaults to half of num_features, rounded up.
 
     Returns:
-        tuple: linear_autoregressive, R,G,Q,F, latent_dimension where linear_autoregressive is an 
-            AnnData, R,G,Q,F are transition matrices or factors thereof (F=RGQ), and latent_dimension is the rank of F.
+        tuple: data, R,G,Q,F, latent_dimension where data is an AnnData, R,G,Q,F are transition matrices or factors thereof (F=RGQ), and latent_dimension is the rank of F.
     """
+    np.random.seed(seed)
+
     # Set up transition matrix unless user-provided
     if F is not None:
         latent_dimension = num_features = F.shape[0]
@@ -404,39 +405,28 @@ def simulate_autoregressive(
         else:
             raise ValueError(f"F_type must be 'random' or 'low_rank' or 'zero'; received {F_type}.")
 
-    # Set up observation metadata
-    # This is a pretty normal simulation combining controls and perturbed samples, with linear propagation of 
-    # perturbation effects.
-    # The complicated part is that there's two sets of controls: one set observed at time 0, and another at the end.
-    #
-    # Also: we return input-output pairs. The first element of each pair has "matched_control" of nan.
-    if type(initial_state) == str and initial_state == "identity":
-        num_controls = num_features
-    num_treatment_types = num_features if include_treatment else 0
+    perturbed_genes = [i if include_treatment else -999 for i in range(num_features)]
     metadata = pd.DataFrame({
-        "index": [str(i) for i in range((num_treatment_types+2)*num_controls)],
+        "index": [str(i) for i in range((num_features*2))],
         "matched_control": np.concatenate((
-            np.repeat(np.nan, num_controls), 
-            np.tile([i for i in range(num_controls)], num_treatment_types + 1),
+            np.repeat(np.nan, num_features), 
+            [i for i in range(num_features)]
         )),
-        "is_control":                           np.repeat([True,  False ], [num_controls*2, (num_treatment_types)*num_controls]),
-        "is_treatment":                         np.repeat([False, True], [num_controls*2, (num_treatment_types)*num_controls]),
-        "is_steady_state":                      [False]*(num_treatment_types+2)*num_controls,
-        "perturbation":                         np.repeat(["-999", "-999"] + include_treatment*[str(i) for i in range(num_treatment_types) ], num_controls),
-        "expression_level_after_perturbation":  np.repeat(expression_level_after_perturbation, (num_treatment_types + 2)*num_controls),
+        "is_control":                           np.repeat([True,  False ], [num_features, num_features]),
+        "perturbation":                         ["-999"]*num_features + perturbed_genes,
+        "expression_level_after_perturbation":  np.repeat(expression_level_after_perturbation, 2*num_features),
     })
-    metadata["matched_control"] = metadata["matched_control"].round().astype('Int64')
+    metadata["matched_control"] = metadata["matched_control"].round().astype('Int64') #otherwise these are floats and you can't index into arrays with them
     metadata["time"] = [num_steps if b else 0 for b in metadata["matched_control"].notnull()]
-    np.random.seed(seed)
     
     # Define starting states
     if type(initial_state) == np.ndarray:
-        assert initial_state.shape == (num_controls, num_features), f"initial_state must have shape {(num_controls, num_features)}; got shape {initial_state.shape}"
+        assert initial_state.shape == (num_features, num_features), f"initial_state must have shape {(num_features, num_features)}; got shape {initial_state.shape}"
         all_controls = initial_state
     elif initial_state == "random":
-        all_controls = np.random.random((num_controls, num_features))
+        all_controls = np.random.random((num_features, num_features))
     elif initial_state == "identity":
-        all_controls = np.kron([1, 2], np.eye(num_controls)).T
+        all_controls = np.kron([1, 2], np.eye(num_features)).T
     else:
         raise ValueError(f"initial_state must be 'random' or 'identity' or an np.array; received type {type(initial_state)}, value {initial_state}.")
 
@@ -449,11 +439,14 @@ def simulate_autoregressive(
     def advance(one_control, perturbation, expression_level_after_perturbation, num_steps):
         one_control = perturb(one_control, perturbation, expression_level_after_perturbation)
         for _ in range(num_steps):
-            one_control = F.dot(one_control) + one_control
+            if residual_connections:
+                one_control = F.dot(one_control) + one_control
+            else: 
+                one_control = F.dot(one_control)
             one_control = perturb(one_control, perturbation, expression_level_after_perturbation)
         return one_control
     expression = np.column_stack(
-            [all_controls[i, :] for i in range(num_controls)] + 
+            [all_controls[i, :] for i in range(num_features)] + 
             [
                 advance(
                     all_controls[metadata.loc[i, "matched_control"], :],
@@ -471,6 +464,10 @@ def simulate_autoregressive(
     )
     # Make some metadata items more suitable for external use
     linear_autoregressive.obs["perturbation"].replace("-999", "control", inplace = True)
+    linear_autoregressive.obs["perturbation"] = [str(s) for s in linear_autoregressive.obs["perturbation"]]
     linear_autoregressive.obs.loc[linear_autoregressive.obs["perturbation"]=="control","is_control"] = True
-    linear_autoregressive.obs.loc[linear_autoregressive.obs["perturbation"]=="control","is_treatment"] = False
+    if not matched_control_is_integer:
+        has_matched_control = metadata["matched_control"].notnull()
+        mc = [int(i) for i in metadata.loc[has_matched_control, "matched_control"]]
+        metadata.loc[has_matched_control, "matched_control"] = metadata.iloc[mc]["index"]
     return linear_autoregressive, R,G,Q,F, latent_dimension

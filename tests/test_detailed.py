@@ -47,7 +47,6 @@ def test_correctness_in_detail(conditions, result_csv):
         print(f" ===== Testing condition {i} ===== ", flush=True)
         print(conditions.loc[i,:].T)
         linear_autoregressive, R,G,Q,F,latent_dimension = ggrn_backend3.simulate_autoregressive(
-            num_controls_per_group    = conditions.at[i,"num_controls"], 
             num_features              = conditions.at[i,"dimension"], 
             num_steps                 = conditions.at[i,"S"], 
             seed                      = conditions.at[i,"seed"], 
@@ -134,18 +133,13 @@ def test_correctness_in_detail(conditions, result_csv):
             starting_expression = linear_autoregressive[int(end_state.obs["matched_control"]),:],
         )
         predictions.obs.index = end_state.obs.index
-        del end_state.obs  ["perturbation_index"]
-        del predictions.obs["perturbation_index"]
-        del end_state.obs  ["index_among_eligible_observations"]
-        del predictions.obs["index_among_eligible_observations"]
-        del end_state.obs  ["index"]
-        del predictions.obs["index"]
-        del end_state.obs  ["matched_control"]
-        del predictions.obs["matched_control"]
+        # Check only the essential metadata
+        end_state.obs   = end_state.obs[["is_control", "perturbation", "expression_level_after_perturbation"]]
+        predictions.obs   = predictions.obs[["is_control", "perturbation", "expression_level_after_perturbation"]]
         end_state.obs  ["expression_level_after_perturbation"] = end_state.obs  ["expression_level_after_perturbation"].astype("float")
         predictions.obs["expression_level_after_perturbation"] = end_state.obs  ["expression_level_after_perturbation"].astype("float")
-        print(end_state.obs)
-        print(predictions.obs)
+        # print(end_state.obs)
+        # print(predictions.obs)
         assert_equal_anndata(predictions, end_state.copy(), decimal=0)       
 
 
@@ -170,14 +164,13 @@ correctness_test_config = set_up_trials(
         'seed':                     [0],
         'S':                        [1],
         'dimension':                [4],    
-        "num_controls":             [10],
         # Settings affecting inference but not data generation
         "matching_method":          ["closest", "user"],
         "low_dimensional_structure":["RGQ", "none"],
         "low_dimensional_training": ["supervised", "SVD", "fixed"],
         'G_initialization_method':  ['identity'],
         'regularization_parameter': [0.0001],
-        # Optimization fuckery
+        # Optimization settings
         'max_epochs':               [10000],
         'batch_size':               [100000],
         "learning_rate":            ["this is overwritten below"],
@@ -212,7 +205,6 @@ speed_test_config = set_up_trials(
         'seed':                     [0],
         'S':                        [1],
         'dimension':                [1000],    
-        "num_controls":             [2],
         # Settings affecting inference but not data generation
         "matching_method":          ["user"],
         "low_dimensional_structure":["RGQ"],
@@ -237,8 +229,9 @@ speed_test_config = set_up_trials(
 class TestBackend3(unittest.TestCase):
     def test_correctness(self):
         test_correctness_in_detail(conditions=correctness_test_config, result_csv="ggrnBackend3UnitTestDetails.csv")
+    # This is commented out because it's a speed test and it takes a long time to run.
     # def test_speed(self):
-    #     test_correctness_in_detail(speed_test_config, result_csv="ggrnBackend3SpeedTest.csv")
+    #     test_correctness_in_detail(conditions=speed_test_config, result_csv="ggrnBackend3SpeedTest.csv")
 
 if __name__ == '__main__':
     unittest.main()

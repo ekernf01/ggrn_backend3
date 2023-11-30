@@ -32,8 +32,8 @@ class TestBackend3(unittest.TestCase):
 
     def test_matching_and_loading(self):
         """Make sure we can pair up everything with a control"""
-        td = ggrn_backend3.MatchControls(example_data, "random")
-        # td = ggrn_backend3.MatchControls(train_data, "closest")
+        td = ggrn.match_controls(example_data, matching_method="random", matched_control_is_integer=True)
+        td = ggrn.match_controls(example_data, matching_method="closest", matched_control_is_integer=True)
         torchy_dataset = ggrn_backend3.AnnDataMatchedControlsDataSet(td, "user", assume_unrecognized_genes_are_controls = False )
         torchy_dataloader = torch.utils.data.DataLoader(torchy_dataset)
         x = torchy_dataset[0]
@@ -41,11 +41,12 @@ class TestBackend3(unittest.TestCase):
         
     def test_everything_runs(self):
         """Make sure all user-facing options run without errors"""
-        linear_autoregressive, R,G,Q,F, factors = ggrn_backend3.simulate_autoregressive(num_controls_per_group=10, num_features = 3)
+        linear_autoregressive, R,G,Q,F, factors = ggrn_backend3.simulate_autoregressive(num_features = 3)
+        linear_autoregressive.obs["is_steady_state"]
         for matching_method in [
             "user",
-            # "random", 
-            # "closest",
+            "random", 
+            "closest",
         ]:
             for regression_method in ["linear"]: #, "multilayer_perceptron"]:
                 for low_dimensional_structure in ["none", "RGQ"]:
