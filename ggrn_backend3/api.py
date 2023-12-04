@@ -424,7 +424,7 @@ def simulate_autoregressive(
         assert initial_state.shape == (num_features, num_features), f"initial_state must have shape {(num_features, num_features)}; got shape {initial_state.shape}"
         all_controls = initial_state
     elif initial_state == "random":
-        all_controls = np.random.random((num_features, num_features))
+        all_controls = 10 + np.random.random((num_features, num_features))
     elif initial_state == "identity":
         all_controls = np.kron([1, 2], np.eye(num_features)).T
     else:
@@ -470,5 +470,6 @@ def simulate_autoregressive(
         has_matched_control = linear_autoregressive.obs["matched_control"].notnull()
         mc = [int(i) for i in linear_autoregressive.obs.loc[has_matched_control, "matched_control"]]
         linear_autoregressive.obs["matched_control"] = [str(s) for s in linear_autoregressive.obs["matched_control"]]
-        linear_autoregressive.obs.loc[has_matched_control, "matched_control"] = [str(s) for s in linear_autoregressive.obs.iloc[mc]["index"]]
+        linear_autoregressive.obs.loc[has_matched_control, "matched_control"] = [str(s) if pd.notnull(s) else s for s in linear_autoregressive.obs.iloc[mc]["index"]]
+        linear_autoregressive.obs["matched_control"] = linear_autoregressive.obs["matched_control"].replace("<NA>", np.nan, regex=False)
     return linear_autoregressive, R,G,Q,F, latent_dimension
