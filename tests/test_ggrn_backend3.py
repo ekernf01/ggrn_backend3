@@ -6,20 +6,20 @@ import numpy as np
 import pandas as pd
 import torch
 import anndata
-import load_perturbations
-import load_networks
+import pereggrn_perturbations
+import pereggrn_networks
 import ggrn.api as ggrn
 
 
 # Access our data collections
-load_networks.set_grn_location(
+pereggrn_networks.set_grn_location(
     '../network_collection/networks'
 )
-load_perturbations.set_data_path(
+pereggrn_perturbations.set_data_path(
     '../perturbation_data/perturbations'
 )
-example_data = load_perturbations.load_perturbation("nakatake")
-example_network = load_networks.LightNetwork(files=["../accessory_data/human_promoters.parquet"])
+example_data = pereggrn_perturbations.pereggrn_perturbation("nakatake")
+example_network = pereggrn_networks.LightNetwork(files=["../accessory_data/human_promoters.parquet"])
 example_perturbations = (("1", 0), ("2", 0))
 
 # TO DO (these are implemented but not unit-tested):

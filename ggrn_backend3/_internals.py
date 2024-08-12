@@ -131,7 +131,7 @@ class LinearAutoregressive(pl.LightningModule):
                 low_dimensional_value = low_dimensional_value.T.copy()
                 self.R.weight = torch.nn.Parameter( torch.as_tensor(                 low_dimensional_value.astype(np.float32)   ) ) 
                 self.Q.weight = torch.nn.Parameter( torch.as_tensor( np.linalg.pinv( low_dimensional_value ).astype(np.float32) ) )
-            elif low_dimensional_training.lower() in ("fixed", "svd"):
+            elif low_dimensional_training.lower() in ("fixed", "svd", "pca"):
                 # Make sure caller has provided projection matrix
                 # Fix R = pinv(Q) and tell torch not to update Q,R
                 assert low_dimensional_value is not None, "Please provide a projection matrix (e.g. motif counts)."
@@ -147,7 +147,7 @@ class LinearAutoregressive(pl.LightningModule):
                 self.Q.requires_grad_(False)
                 self.R.requires_grad_(False)
             else:
-                raise ValueError(f"low_dimensional_training must be 'supervised' or 'fixed' or 'SVD'. Value: {low_dimensional_training}")
+                raise ValueError(f"low_dimensional_training must be 'supervised' or 'fixed' or 'svd' or 'pca'. Value: {low_dimensional_training}")
         
         
 

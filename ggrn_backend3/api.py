@@ -52,6 +52,9 @@ class AnnDataMatchedControlsDataSet(torch.utils.data.Dataset):
             raise KeyError("train data must have a comma-separated str column in .obs with key 'expression_level_after_perturbation'.")
         if self.adata.obs["expression_level_after_perturbation"].dtype.name != "str":
             self.adata.obs['expression_level_after_perturbation'] = self.adata.obs['expression_level_after_perturbation'].astype(str)
+        # For the autoregressive backend, the matched controls must be integer indices, not sample names
+        self.adata.obs["integer_index"] = [i for i in range(self.adata.n_obs)]
+        self.adata.obs["matched_control"] = [self.adata.obs.loc[o, "integer_index"] for o in self.adata.obs["matched_control"]]
         self.adata = ggrn.match_controls(self.adata, matching_method, matched_control_is_integer=True)
         assert self.adata.X.dtype == np.float32, f"Use single-precision input with this model; got dtype {self.adata.X.dtype}"
 
@@ -101,7 +104,8 @@ class GGRNAutoregressiveModel:
         train_data: AnnData object,
         matching_method: str, passed to ggrn.api.match_controls.
         regression_method: Functional form of G. Currently only accepts "linear".
-        S (int): Number of time-steps separating each sample from its matched control.
+        S (int): Number of time-steps separating each sample from its matched control. In the future, we will deprecate/ignore this arg and
+            instead include time-point info for each sample.
         regression_method (str): Currently only allows "linear".
         low_dimensional_structure (str) "none" or "dynamics" or "RGQ". 
             - If "none", dynamics will be modeled using the original data.
@@ -260,7 +264,8 @@ class GGRNAutoregressiveModel:
     def predict(
         self,
         perturbations: list, 
-        starting_expression: anndata.AnnData
+        starting_expression: anndata.AnnData, 
+        prediction_timescale: list [1],
     ) -> anndata.AnnData:
         """Predict future expression
 
@@ -270,6 +275,7 @@ class GGRNAutoregressiveModel:
                 same predicted expression profile. To run a simulation with no perturbed genes, use "control" as the gene name.
                 Tuples like ("control,NANOG", "0,0") or ("notagene", 0) are not allowed.
             starting_expression (anndata.AnnData): Starting state for simulation. One expression profile per perturbation.
+            prediction_timescale: the time-points to predict each intervention at.
 
         Returns:
             anndata.AnnData: Object with one expression profile per perturbation
@@ -281,7 +287,8 @@ class GGRNAutoregressiveModel:
         except AttributeError:
             pass
         predictions = starting_expression.copy()
-
+        if len(prediction_timescale)>1 or prediction_timescale[0]!=1:
+            raise NotImplementedError("Prediction of trajectories is not implemented yet.")
         # Use this when downstream code is fine with missing values among ints
         def permissive_int(x):
             try:
@@ -299,6 +306,7 @@ class GGRNAutoregressiveModel:
                 starting_expression = starting_expression[i, :].X.toarray().squeeze(), 
                 perturbed_indices = pi,
                 perturbed_values  = pv,
+                # TODO: include prediction_timescale here
             )
             predictions.obs.loc[
                 predictions.obs.index[i], # I am afraid to do iloc with col names
@@ -319,6 +327,7 @@ class GGRNAutoregressiveModel:
         perturbed_indices: np.ndarray,
         perturbed_values: np.ndarray,
         starting_expression: np.ndarray,
+        prediction_timescale: list,
     ) -> np.ndarray:
         """Predict expression after perturbation.
 
@@ -326,6 +335,7 @@ class GGRNAutoregressiveModel:
             perturbed_indices (np.ndarray): Indices of perturbed features.
             perturbed_values (np.ndarray): Values of perturbed features.
             starting_expression (np.ndarray): Expression levels before perturbation.
+            prediction_timescale (list): list of time-points to make predictions at
 
         Returns:
             np.ndarray: Expression after perturbation. Numpy array of same shape as starting_expression.
@@ -334,8 +344,10 @@ class GGRNAutoregressiveModel:
         assert type(perturbed_values)    is np.ndarray, f"Values of perturbed features must be provided as a numpy array; got {type(perturbed_values)}"
         assert type(starting_expression) is np.ndarray, f"Starting values must be provided as a numpy array; got {type(starting_expression)}"
         x = starting_expression
+        if len(prediction_timescale)>1 or prediction_timescale[0]!=1:
+            raise NotImplementedError("prediction_timescale not implemented yet.")
         with torch.no_grad():
-            for _ in range(self.S):
+            for _ in range(self.S): # TODO: incorporate prediction_timescale here
                 x = self.model.forward(torch.tensor(x), zip(perturbed_indices, perturbed_values))
                 for i in range(len(perturbed_indices)):
                     x[perturbed_indices[i]] = perturbed_values[i]
@@ -424,7 +436,7 @@ def simulate_autoregressive(
         assert initial_state.shape == (num_features, num_features), f"initial_state must have shape {(num_features, num_features)}; got shape {initial_state.shape}"
         all_controls = initial_state
     elif initial_state == "random":
-        all_controls = 10 + np.random.random((num_features, num_features))
+        all_controls = np.random.random((num_features, num_features))
     elif initial_state == "identity":
         all_controls = np.kron([1, 2], np.eye(num_features)).T
     else:
